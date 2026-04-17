@@ -1,6 +1,6 @@
 {
-  "name": "archastro-platform-sdk",
-  "version": "0.77.0",
+  "name": "archastro-sdk",
+  "version": "0.1.0",
   "baseUrl": "https://platform.archastro.ai",
   "apiBase": "/api",
   "defaultVersion": "v1",

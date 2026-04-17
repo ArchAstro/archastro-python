@@ -3,7 +3,7 @@
 Python SDK for the ArchAstro Platform API.
 
 ```bash
-uv add archastro-platform-sdk      # or: pip install archastro-platform-sdk
+uv add archastro-sdk      # or: pip install archastro-sdk
 ```
 
 ```python
