@@ -217,9 +217,7 @@ class Channel:
                 try:
                     callback(payload)
                 except Exception:
-                    logger.exception(
-                        "Error in handler for %s:%s (replayed)", self._topic, event
-                    )
+                    logger.exception("Error in handler for %s:%s (replayed)", self._topic, event)
 
         def unsubscribe() -> None:
             handlers.remove(callback)
