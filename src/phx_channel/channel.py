@@ -37,6 +37,14 @@ class Channel:
         self._event_handlers: dict[str, list[Callable[..., Any]]] = {}
         self._pending_replies: dict[str, asyncio.Future[dict[str, Any]]] = {}
         self._push_buffer: list[tuple[str, Any, asyncio.Future[dict[str, Any]]]] = []
+        # Inbound pushes that arrived before any handler was registered.
+        # Server scenarios can `autoPush` in response to a join frame, and
+        # that push can land on the asyncio queue before the caller has
+        # had a chance to register a handler post-join. We replay these
+        # to the first matching handler registered within the window.
+        # Bounded so a forgotten handler doesn't leak unbounded memory.
+        self._pending_pushes: dict[str, list[Any]] = {}
+        self._pending_pushes_cap: int = 32
 
     @property
     def topic(self) -> str:
@@ -195,10 +203,21 @@ class Channel:
         """
         Register a callback for a channel event.
 
-        Returns an unsubscribe function.
+        Returns an unsubscribe function. If pushes for this event already
+        arrived before any handler was registered (e.g. server-side
+        autoPush fired on join), they're replayed to this callback in
+        arrival order so the caller can't miss them due to scheduling.
         """
         handlers = self._event_handlers.setdefault(event, [])
         handlers.append(callback)
+
+        pending = self._pending_pushes.pop(event, None)
+        if pending:
+            for payload in pending:
+                try:
+                    callback(payload)
+                except Exception:
+                    logger.exception("Error in handler for %s:%s (replayed)", self._topic, event)
 
         def unsubscribe() -> None:
             handlers.remove(callback)
@@ -225,13 +244,22 @@ class Channel:
         elif event == "phx_error":
             self._handle_error(payload)
         else:
-            # User event — dispatch to handlers
-            handlers = self._event_handlers.get(event, [])
-            for handler in handlers:
-                try:
-                    handler(payload)
-                except Exception:
-                    logger.exception("Error in handler for %s:%s", self._topic, event)
+            # User event — dispatch to handlers, or buffer if none yet.
+            handlers = self._event_handlers.get(event)
+            if handlers:
+                for handler in handlers:
+                    try:
+                        handler(payload)
+                    except Exception:
+                        logger.exception("Error in handler for %s:%s", self._topic, event)
+            else:
+                buf = self._pending_pushes.setdefault(event, [])
+                if len(buf) < self._pending_pushes_cap:
+                    buf.append(payload)
+                else:
+                    # Drop the oldest to bound memory for orphan events.
+                    buf.pop(0)
+                    buf.append(payload)
 
     def _handle_reply(self, ref: str | None, payload: Any) -> None:
         if ref and ref in self._pending_replies:
