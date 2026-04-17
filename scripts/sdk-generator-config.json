@@ -1,0 +1,8 @@
+{
+  "name": "archastro-platform-sdk",
+  "version": "0.77.0",
+  "baseUrl": "https://platform.archastro.ai",
+  "apiBase": "/api",
+  "defaultVersion": "v1",
+  "description": "Python SDK for the ArchAstro Platform API"
+}

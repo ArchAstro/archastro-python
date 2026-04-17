@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.venv/
+uv.lock
+
+# Node tooling (for @archastro/channel-harness + prism)
+node_modules/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
