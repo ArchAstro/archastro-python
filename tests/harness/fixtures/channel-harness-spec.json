@@ -1,0 +1,131 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "LiveDoc Channel API",
+    "version": "0.1.0",
+    "description": "Fake real-time collaborative-document API used to exercise the channel harness end-to-end."
+  },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "User": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" }
+        }
+      },
+      "Document": {
+        "type": "object",
+        "required": ["id", "content", "version"],
+        "properties": {
+          "id": { "type": "string" },
+          "content": { "type": "string" },
+          "version": { "type": "integer" }
+        }
+      },
+      "EditApplied": {
+        "type": "object",
+        "required": ["user_id", "position", "text", "version"],
+        "properties": {
+          "user_id": { "type": "string" },
+          "position": { "type": "integer" },
+          "text": { "type": "string" },
+          "version": { "type": "integer" }
+        }
+      }
+    }
+  },
+  "x-channels": [
+    {
+      "name": "LiveDoc",
+      "description": "Collaborative editing channel for a single document.",
+      "joins": [
+        {
+          "pattern": "doc:{doc_id}",
+          "name": "join_document",
+          "description": "Subscribe to a document and receive its current state.",
+          "params": {
+            "type": "object",
+            "required": ["userId"],
+            "properties": {
+              "userId": { "type": "string" },
+              "cursor": { "type": "integer" }
+            }
+          },
+          "returns": {
+            "type": "object",
+            "required": ["document", "collaborators"],
+            "properties": {
+              "document": { "$ref": "#/components/schemas/Document" },
+              "collaborators": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/User" }
+              }
+            }
+          }
+        }
+      ],
+      "messages": [
+        {
+          "event": "edit",
+          "description": "Apply an edit at a position. Server assigns the next version.",
+          "params": {
+            "type": "object",
+            "required": ["position", "text"],
+            "properties": {
+              "position": { "type": "integer" },
+              "text": { "type": "string" }
+            }
+          },
+          "returns": {
+            "type": "object",
+            "required": ["version"],
+            "properties": {
+              "version": { "type": "integer" }
+            }
+          }
+        },
+        {
+          "event": "move_cursor",
+          "description": "Report the caller's cursor position.",
+          "params": {
+            "type": "object",
+            "required": ["position"],
+            "properties": {
+              "position": { "type": "integer" }
+            }
+          },
+          "returns": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      ],
+      "pushes": [
+        {
+          "event": "user_joined",
+          "description": "Another user joined the document.",
+          "payload": { "$ref": "#/components/schemas/User" }
+        },
+        {
+          "event": "user_left",
+          "description": "A user left the document.",
+          "payload": {
+            "type": "object",
+            "required": ["user_id"],
+            "properties": {
+              "user_id": { "type": "string" }
+            }
+          }
+        },
+        {
+          "event": "edit_applied",
+          "description": "An edit from another user was applied to the document.",
+          "payload": { "$ref": "#/components/schemas/EditApplied" }
+        }
+      ]
+    }
+  ]
+}
