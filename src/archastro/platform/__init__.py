@@ -8,4 +8,4 @@ from .auth import AuthClient, AuthTokens  # noqa: F401
 from .client import PlatformClient  # noqa: F401
 from .v1 import V1  # noqa: F401
 
-__version__ = _pkg_version("archastro-platform-sdk")
+__version__ = _pkg_version("archastro-sdk")
