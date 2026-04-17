@@ -287,6 +287,35 @@ async def test_null_join_ref_accepted():
     assert received == [{"data": "broadcast"}]
 
 
+async def test_pushes_before_handler_are_replayed_on_registration():
+    """
+    Server `autoPush` can fire in response to a join frame and land on the
+    asyncio queue before the caller has registered a handler. Verify the
+    Channel buffers those pushes and replays them when on() is called.
+    """
+    _, ch = await _joined_channel()
+    # Two pushes arrive with no handlers yet — both should be buffered.
+    ch._on_message(None, None, "new_entry", {"id": "a"})
+    ch._on_message(None, None, "new_entry", {"id": "b"})
+    received: list[dict] = []
+    ch.on("new_entry", lambda p: received.append(p))
+    assert received == [{"id": "a"}, {"id": "b"}]
+    # Subsequent pushes go straight through.
+    ch._on_message(None, None, "new_entry", {"id": "c"})
+    assert received == [{"id": "a"}, {"id": "b"}, {"id": "c"}]
+
+
+async def test_pending_push_buffer_is_bounded():
+    _, ch = await _joined_channel()
+    ch._pending_pushes_cap = 3
+    for i in range(5):
+        ch._on_message(None, None, "evt", {"i": i})
+    received: list[dict] = []
+    ch.on("evt", lambda p: received.append(p))
+    # Oldest dropped once cap hit; newest kept in order.
+    assert received == [{"i": 2}, {"i": 3}, {"i": 4}]
+
+
 async def test_handler_error_does_not_crash_dispatch():
     _, ch = await _joined_channel()
     received = []
