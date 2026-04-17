@@ -75,7 +75,12 @@ npx --yes "$SDK_GENERATOR_SPEC" \
 # the repo's style config. The generator emits deliberately plain
 # Python; this brings it in line with what CI expects.
 log "Applying ruff lint fixes + format"
-uv run ruff check --fix --fix-only src tests >/dev/null
-uv run ruff format src tests >/dev/null
+# cd into the repo so `uv run` discovers this repo's pyproject.toml
+# even when the script is invoked with a different CWD.
+(
+  cd "$REPO_ROOT"
+  uv run ruff check --fix --fix-only src tests >/dev/null
+  uv run ruff format src tests >/dev/null
+)
 
 log "Done. Review the diff and commit, or re-run this script after the spec is updated upstream."
