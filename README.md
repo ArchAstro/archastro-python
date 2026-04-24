@@ -15,13 +15,16 @@ teams = client.v1.teams.list()
 
 ## Packages
 
-- **`archastro`** — typed REST + channel SDK generated from the canonical
-  OpenAPI spec at [`ArchAstro/archastro-openapi`](https://github.com/ArchAstro/archastro-openapi).
+All public code lives under the single top-level `archastro` package:
+
+- **`archastro.platform`** — typed REST + channel SDK generated from
+  the canonical OpenAPI spec at
+  [`ArchAstro/archastro-openapi`](https://github.com/ArchAstro/archastro-openapi).
   Pydantic models, async channel classes, auth helpers.
-- **`phx_channel`** — the hand-written Phoenix Channels client the
-  generated channel classes run on top of. WebSocket transport, join /
-  reply / push / leave, heartbeat, reconnect, and a `HarnessServiceClient`
-  for driving the
+- **`archastro.phx_channel`** — the hand-written Phoenix Channels
+  client the generated channel classes run on top of. WebSocket
+  transport, join / reply / push / leave, heartbeat, reconnect, and a
+  `HarnessServiceClient` for driving the
   [`@archastro/channel-harness`](https://www.npmjs.com/package/@archastro/channel-harness)
   service from Python tests.
 
@@ -29,7 +32,7 @@ teams = client.v1.teams.list()
 
 This repo contains:
 
-- Python SDK (`src/archastro/`, `src/phx_channel/`) installed via `uv`
+- Python SDK (`src/archastro/`) installed via `uv`
 - JS tooling (`package.json`) — the channel-harness subprocess that
   powers the channel contract tests, plus the Prism mock server that
   backs the REST contract tests. Installed via `npm ci`.
@@ -45,7 +48,7 @@ uv sync          # Python deps + dev deps (pytest, ruff)
 
 ```bash
 # Unit tests only (no external services needed)
-uv run pytest tests/test_http_client.py tests/test_synthetic.py src/phx_channel/tests/unit.test.py
+uv run pytest tests/test_http_client.py src/archastro/phx_channel/tests/test_unit.py
 
 # REST contract tests (spawns Prism mock server)
 uv run pytest tests/contract

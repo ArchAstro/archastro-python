@@ -1,7 +1,7 @@
 """
 Smoke tests that drive the channel-harness service from the Python side.
 
-Uses raw ``phx_channel.Socket`` + ``HarnessServiceClient`` — no generated
+Uses raw ``archastro.phx_channel.Socket`` + ``HarnessServiceClient`` — no generated
 channel class involved. If these pass, the service's wire contract and the
 Python runtime's reply/push handling are both sound, which is the prerequisite
 for the emitted per-channel tests (added in a separate file by the generator).
@@ -17,8 +17,8 @@ from typing import Any
 
 import pytest
 
-from phx_channel import HarnessServiceClient, Socket
-from phx_channel.channel import ChannelError
+from archastro.phx_channel import HarnessServiceClient, Socket
+from archastro.phx_channel.channel import ChannelError
 
 
 @pytest.fixture

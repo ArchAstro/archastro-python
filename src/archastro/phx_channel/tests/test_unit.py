@@ -7,8 +7,8 @@ import asyncio
 
 import pytest
 
-from phx_channel.channel import Channel, ChannelError
-from phx_channel.socket import Socket
+from archastro.phx_channel.channel import Channel, ChannelError
+from archastro.phx_channel.socket import Socket
 
 
 class MockSocket:
