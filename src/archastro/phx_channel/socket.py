@@ -18,7 +18,7 @@ from websockets.asyncio.client import ClientConnection
 
 from .channel import Channel
 
-logger = logging.getLogger("phx_channel")
+logger = logging.getLogger("archastro.phx_channel")
 
 # Default backoff schedule (milliseconds) matching the Phoenix JS client
 DEFAULT_RECONNECT_BACKOFF_MS = [10, 50, 100, 150, 200, 250, 500, 1000, 2000]

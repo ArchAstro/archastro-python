@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .socket import Socket
 
-logger = logging.getLogger("phx_channel")
+logger = logging.getLogger("archastro.phx_channel")
 
 DEFAULT_TIMEOUT_S = 10
 
