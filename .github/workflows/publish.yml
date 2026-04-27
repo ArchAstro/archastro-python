@@ -1,0 +1,95 @@
+name: Publish
+
+# Triggered by the tags that release.yml pushes (v*), and reachable via
+# workflow_dispatch so release.yml can re-trigger after pushing the tag —
+# tags pushed by GITHUB_TOKEN don't themselves trigger workflows.
+#
+# Authenticates to PyPI via OIDC (Trusted Publishing) — no PYPI_API_TOKEN.
+#
+# Prereqs (one-time):
+#   1. First publish done manually from a laptop (uv publish or twine upload)
+#   2. Trusted publisher configured at pypi.org/manage/project/archastro-sdk/
+#      pointing at this workflow filename (publish.yml) and the `pypi`
+#      environment used below.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write      # create GitHub Release
+  id-token: write      # OIDC token for PyPI Trusted Publishing
+
+jobs:
+  publish:
+    name: PyPI publish
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/archastro-sdk
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v3.2.4
+        with:
+          enable-cache: true
+
+      - name: Install project + dev deps
+        run: uv sync --all-extras
+
+      - name: Resolve version from tag
+        id: pkg
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          case "$TAG" in
+            v*)
+              echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unrecognized tag: $TAG (expected v*)" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Verify pyproject.toml version matches tag
+        env:
+          EXPECTED: ${{ steps.pkg.outputs.version }}
+        run: |
+          set -euo pipefail
+          actual=$(uv run python -c "import tomllib, sys; print(tomllib.loads(open('pyproject.toml','rb').read().decode())['project']['version'])")
+          if [ "$actual" != "$EXPECTED" ]; then
+            echo "Version mismatch: tag says $EXPECTED, pyproject.toml says $actual" >&2
+            exit 1
+          fi
+
+      - name: Build sdist + wheel
+        run: |
+          rm -rf dist
+          uv build
+
+      - name: Publish to PyPI (Trusted Publishing)
+        uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdfc # release/v1
+        # Defaults: reads dist/, uses OIDC when id-token: write is set + a
+        # trusted publisher is configured for this repo + workflow + env.
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.pkg.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" \
+            --title "archastro-sdk v$VERSION" \
+            --notes "Published to PyPI: https://pypi.org/project/archastro-sdk/$VERSION/" \
+            --generate-notes
