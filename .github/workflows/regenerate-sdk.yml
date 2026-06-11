@@ -35,7 +35,16 @@ jobs:
           node-version: 20
           cache: npm
 
-      - run: npm ci --ignore-scripts
+      - name: Install latest SDK tooling
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts --save-dev \
+            @archastro/sdk-generator@latest \
+            @archastro/channel-harness@latest
+          npm pkg set \
+            devDependencies.@archastro/sdk-generator=latest \
+            devDependencies.@archastro/channel-harness=latest
+          npm install --package-lock-only --ignore-scripts
 
       - name: Audit JS tooling dependencies
         run: npm audit --audit-level=moderate
@@ -65,12 +74,12 @@ jobs:
       - name: Detect changes
         id: diff
         run: |
-          if [ -z "$(git status --porcelain src tests specs)" ]; then
+          if [ -z "$(git status --porcelain package.json package-lock.json src tests specs)" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No changes from regeneration; nothing to do."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            git status --short src tests specs
+            git status --short package.json package-lock.json src tests specs
           fi
 
       - name: Resolve generator version
@@ -91,7 +100,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "$AUTO_BRANCH"
-          git add src tests specs
+          git add package.json package-lock.json src tests specs
           git commit -m "chore(sdk): regenerate from archastro-openapi@$REF (generator $GEN_VERSION)"
           git push --force-with-lease origin "$AUTO_BRANCH"
 
@@ -103,12 +112,12 @@ jobs:
           GEN_VERSION: ${{ steps.gen.outputs.version }}
         run: |
           set -euo pipefail
-          file_count=$(git diff --name-only HEAD~1 HEAD -- src tests specs | wc -l | tr -d ' ')
+          file_count=$(git diff --name-only HEAD~1 HEAD -- package.json package-lock.json src tests specs | wc -l | tr -d ' ')
           body=$(cat <<EOF
           Automated SDK regeneration.
 
           - **archastro-openapi ref**: \`$REF\`
-          - **generator version**: \`$GEN_VERSION\` from package-lock.json
+          - **generator version**: \`$GEN_VERSION\` resolved from npm latest and locked in package-lock.json
           - **changed files**: $file_count
 
           Review the diff carefully — generator output changes can be subtle. The PR's CI will run lint + tests.
