@@ -21,6 +21,10 @@ SPEC_PATH = os.environ.get(
 
 _prism_process = None
 
+PRISM_BIN = os.environ.get(
+    "PRISM_BIN",
+    os.path.join(os.path.dirname(__file__), "../../node_modules/.bin/prism"),
+)
 HARNESS_BIN = os.environ.get(
     "ARCHASTRO_HARNESS_BIN",
     os.path.join(
@@ -44,10 +48,13 @@ collect_ignore_glob = [] if _channel_tests_enabled() else ["channels/*"]
 
 def pytest_configure(config):
     global _prism_process
+    if not os.path.exists(PRISM_BIN):
+        raise RuntimeError(
+            f"Prism bin not found at {PRISM_BIN}. Run 'npm ci --ignore-scripts' first."
+        )
     _prism_process = subprocess.Popen(
         [
-            "npx",
-            "@stoplight/prism-cli",
+            PRISM_BIN,
             "mock",
             SPEC_PATH,
             "--port",
@@ -78,7 +85,7 @@ def pytest_unconfigure(config):
 def _wait_for_prism(timeout=30):
     deadline = time.time() + timeout
     while time.time() < deadline:
-        # Fast-fail if Prism process exited (bad spec path, missing npx, etc.)
+        # Fast-fail if Prism process exited (bad spec path, missing Prism binary, etc.)
         if _prism_process.poll() is not None:
             stderr = _prism_process.stderr.read().decode() if _prism_process.stderr else ""
             raise RuntimeError(f"Prism exited with code {_prism_process.returncode}: {stderr}")
@@ -95,7 +102,7 @@ def _start_harness_service(timeout: float = 15.0) -> None:
     if not os.path.exists(HARNESS_BIN):
         raise RuntimeError(
             f"channel-harness bin not found at {HARNESS_BIN}. Set ARCHASTRO_HARNESS_BIN "
-            f"or run 'npm install @archastro/channel-harness' (or 'npm run build' in the archastro-openapi workspace)."
+            f"or run 'npm ci --ignore-scripts' (or 'npm run build' in the archastro-openapi workspace)."
         )
     _harness_process = subprocess.Popen(
         ["node", HARNESS_BIN, SPEC_PATH],

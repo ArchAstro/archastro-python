@@ -38,12 +38,14 @@ jobs:
           python-version: '3.12'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v3.2.4
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
+          version: "0.11.3"
+          checksum: c0f3236f146e55472663cfbcc9be3042a9f1092275bbe3fe2a56a6cbfd3da5ce
           enable-cache: true
 
       - name: Install project + dev deps
-        run: uv sync --all-extras
+        run: uv sync --locked --all-extras
 
       - name: Resolve version from tag
         id: pkg
@@ -75,7 +77,7 @@ jobs:
       - name: Build sdist + wheel
         run: |
           rm -rf dist
-          uv build
+          uv build --no-build-isolation
 
       - name: Publish to PyPI (Trusted Publishing)
         uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdfc # release/v1

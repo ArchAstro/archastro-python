@@ -40,7 +40,10 @@ jobs:
           node-version: 20
           cache: npm
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
+
+      - name: Audit JS tooling dependencies
+        run: npm audit --audit-level=moderate
 
       - name: Setup Python
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
@@ -48,22 +51,31 @@ jobs:
           python-version: '3.12'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v3.2.4
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
+          version: "0.11.3"
+          checksum: c0f3236f146e55472663cfbcc9be3042a9f1092275bbe3fe2a56a6cbfd3da5ce
           enable-cache: true
 
       - name: Install project + dev deps
-        run: uv sync --all-extras
+        run: uv sync --locked --all-extras
 
       - name: Test (sanity gate before bumping)
-        # Same suites as ci.yml but Python 3.12 only — keeps the release
-        # gate honest without spending time on the full ci.yml matrix.
+        # Core CI gates on Python 3.12 only — keeps the release gate honest
+        # without spending time on the full ci.yml matrix.
         run: |
           uv run ruff check
           uv run ruff format --check
           uv run pytest tests/test_http_client.py src/archastro/phx_channel/tests/test_unit.py
           uv run pytest tests/harness
           uv run pytest tests/contract
+          rm -rf dist
+          uv build --no-build-isolation
+          uv export --locked --no-dev --no-emit-project --format requirements.txt --output-file dist/runtime-requirements.txt >/dev/null
+          uv venv --clear .wheel-smoke
+          uv pip install --python .wheel-smoke --require-hashes -r dist/runtime-requirements.txt
+          uv pip install --python .wheel-smoke --no-deps dist/*.whl
+          .wheel-smoke/bin/python -c "import archastro.platform; import archastro.phx_channel"
         env:
           ARCHASTRO_RUN_CHANNEL_CONTRACT_TESTS: "1"
 

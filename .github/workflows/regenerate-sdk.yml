@@ -14,11 +14,6 @@ on:
         description: archastro-openapi git ref to pull spec from
         required: false
         default: main
-      generator_spec:
-        description: npm spec for @archastro/sdk-generator (e.g. @archastro/sdk-generator@latest or @0.2.0)
-        required: false
-        default: '@archastro/sdk-generator@latest'
-
 permissions:
   contents: write
   pull-requests: write
@@ -40,7 +35,10 @@ jobs:
           node-version: 20
           cache: npm
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
+
+      - name: Audit JS tooling dependencies
+        run: npm audit --audit-level=moderate
 
       - name: Setup Python
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
@@ -48,19 +46,20 @@ jobs:
           python-version: '3.12'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v3.2.4
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
+          version: "0.11.3"
+          checksum: c0f3236f146e55472663cfbcc9be3042a9f1092275bbe3fe2a56a6cbfd3da5ce
           enable-cache: true
 
       - name: Install project + dev deps
         # Required because the regen script invokes `uv run ruff ...` to
         # normalize formatting on the generated tree.
-        run: uv sync --all-extras
+        run: uv sync --locked --all-extras
 
       - name: Regenerate SDK
         env:
           ARCHASTRO_OPENAPI_REF: ${{ inputs.openapi_ref }}
-          ARCHASTRO_SDK_GENERATOR: ${{ inputs.generator_spec }}
         run: ./scripts/regenerate_sdk.sh
 
       - name: Detect changes
@@ -77,11 +76,9 @@ jobs:
       - name: Resolve generator version
         if: steps.diff.outputs.changed == 'true'
         id: gen
-        env:
-          GEN_SPEC: ${{ inputs.generator_spec }}
         run: |
           set -euo pipefail
-          resolved=$(npm view "$GEN_SPEC" version 2>/dev/null || echo unknown)
+          resolved=$(node -p "require('./node_modules/@archastro/sdk-generator/package.json').version")
           echo "version=$resolved" >> "$GITHUB_OUTPUT"
 
       - name: Commit + force-push to ${{ env.AUTO_BRANCH }}
@@ -103,7 +100,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REF: ${{ inputs.openapi_ref }}
-          GEN_SPEC: ${{ inputs.generator_spec }}
           GEN_VERSION: ${{ steps.gen.outputs.version }}
         run: |
           set -euo pipefail
@@ -112,7 +108,7 @@ jobs:
           Automated SDK regeneration.
 
           - **archastro-openapi ref**: \`$REF\`
-          - **generator spec**: \`$GEN_SPEC\` (resolved to \`$GEN_VERSION\`)
+          - **generator version**: \`$GEN_VERSION\` from package-lock.json
           - **changed files**: $file_count
 
           Review the diff carefully — generator output changes can be subtle. The PR's CI will run lint + tests.

@@ -6,7 +6,7 @@
 #      on GitHub (the canonical source of truth).
 #   2. Copy it into ./specs/platform-openapi.json so the SDK package
 #      ships its own copy for contract-test consumers.
-#   3. Run @archastro/sdk-generator (from public npm via npx) to emit
+#   3. Run the locked local @archastro/sdk-generator to emit
 #      Pydantic models, resources, and channel classes under
 #      src/archastro/platform/, and the contract-test tree under
 #      tests/contract/.
@@ -14,16 +14,14 @@
 # Usage:
 #   ./scripts/regenerate_sdk.sh                       # pull spec from main
 #   ARCHASTRO_OPENAPI_REF=some-branch ./scripts/regenerate_sdk.sh
-#   ARCHASTRO_SDK_GENERATOR=@archastro/sdk-generator@0.1.0 ./scripts/regenerate_sdk.sh
 #
 # Env knobs:
 #   ARCHASTRO_OPENAPI_REF     Git ref in archastro-openapi to pull the
 #                             spec from (default: main). Useful when a
 #                             spec change is on a branch awaiting merge.
-#   ARCHASTRO_SDK_GENERATOR   Package spec for the generator passed to
-#                             npx (default: @archastro/sdk-generator@latest).
-#                             Pin to a specific version for reproducible
-#                             regenerations in a release branch.
+#   ARCHASTRO_SDK_GENERATOR_BIN
+#                             Path to a locally installed sdk-generator binary.
+#                             Defaults to node_modules/.bin/sdk-generator.
 
 set -euo pipefail
 
@@ -33,7 +31,7 @@ CONFIG_FILE="$REPO_ROOT/scripts/sdk-generator-config.json"
 
 REF="${ARCHASTRO_OPENAPI_REF:-main}"
 SPEC_URL="https://raw.githubusercontent.com/ArchAstro/archastro-openapi/${REF}/specs/platform-openapi.json"
-SDK_GENERATOR_SPEC="${ARCHASTRO_SDK_GENERATOR:-@archastro/sdk-generator@latest}"
+SDK_GENERATOR_BIN="${ARCHASTRO_SDK_GENERATOR_BIN:-$REPO_ROOT/node_modules/.bin/sdk-generator}"
 
 log() { printf '==> %s\n' "$*"; }
 
@@ -56,14 +54,19 @@ SPEC="$SPEC_DST" node -e '
 # ─── 2. Generate SDK + contract tests ───────────────────────────
 
 log "Generating Python SDK into $REPO_ROOT"
-npx --yes "$SDK_GENERATOR_SPEC" \
+if [ ! -x "$SDK_GENERATOR_BIN" ]; then
+  echo "sdk-generator not found at $SDK_GENERATOR_BIN. Run 'npm ci --ignore-scripts' first." >&2
+  exit 1
+fi
+
+"$SDK_GENERATOR_BIN" \
   --spec "$SPEC_DST" \
   --config "$CONFIG_FILE" \
   --lang python \
   --out "$REPO_ROOT"
 
 log "Generating Python contract tests into $REPO_ROOT"
-npx --yes "$SDK_GENERATOR_SPEC" \
+"$SDK_GENERATOR_BIN" \
   --spec "$SPEC_DST" \
   --config "$CONFIG_FILE" \
   --lang contract-tests-py \
