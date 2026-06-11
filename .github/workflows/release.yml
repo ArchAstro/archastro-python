@@ -153,5 +153,5 @@ jobs:
             --head "$BRANCH" \
             --title "release: archastro-sdk v$VERSION" \
             --body "$body")
-          gh pr merge "$pr_url" --squash --delete-branch
+          gh pr merge "$pr_url" --rebase --delete-branch
           echo "Merged $pr_url"
