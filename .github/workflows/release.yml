@@ -1,0 +1,157 @@
+name: Release
+
+# Manually trigger from the Actions tab to:
+#   1. Bump pyproject.toml + uv.lock versions on a release branch
+#   2. Push a tag (vX.Y.Z) which triggers publish.yml
+#   3. Open a PR back to main and merge it so main tracks the bump
+#
+# Publishing uses PyPI Trusted Publishing (OIDC) — no PYPI_API_TOKEN.
+# A package's first publish must be done manually; after that, configure a
+# trusted publisher on pypi.org pointing at publish.yml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write           # to dispatch publish.yml via `gh workflow run`
+
+jobs:
+  release:
+    name: Bump + branch + tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      - name: Audit JS tooling dependencies
+        run: npm audit --audit-level=moderate
+
+      - name: Setup Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+        with:
+          version: "0.11.3"
+          checksum: c0f3236f146e55472663cfbcc9be3042a9f1092275bbe3fe2a56a6cbfd3da5ce
+          enable-cache: true
+
+      - name: Install project + dev deps
+        run: uv sync --locked --all-extras
+
+      - name: Test (sanity gate before bumping)
+        # Core CI gates on Python 3.12 only — keeps the release gate honest
+        # without spending time on the full ci.yml matrix.
+        run: |
+          uv run ruff check
+          uv run ruff format --check
+          uv run pytest tests/test_http_client.py src/archastro/phx_channel/tests/test_unit.py
+          uv run pytest tests/harness
+          uv run pytest tests/contract
+          rm -rf dist
+          uv build --no-build-isolation
+          uv export --locked --no-dev --no-emit-project --format requirements.txt --output-file dist/runtime-requirements.txt >/dev/null
+          uv venv --clear .wheel-smoke
+          uv pip install --python .wheel-smoke --require-hashes -r dist/runtime-requirements.txt
+          uv pip install --python .wheel-smoke --no-deps dist/*.whl
+          .wheel-smoke/bin/python -c "import archastro.platform; import archastro.phx_channel"
+        env:
+          ARCHASTRO_RUN_CHANNEL_CONTRACT_TESTS: "1"
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version
+        id: bump
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+          # `uv version --bump` updates pyproject.toml + uv.lock atomically.
+          uv version --bump "$BUMP"
+          version=$(uv run python -c "import tomllib; print(tomllib.loads(open('pyproject.toml','rb').read().decode())['project']['version'])")
+          tag="v$version"
+          branch="release/$tag"
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "branch=$branch"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Commit + push release branch
+        env:
+          BRANCH: ${{ steps.bump.outputs.branch }}
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          set -euo pipefail
+          git checkout -b "$BRANCH"
+          git add pyproject.toml uv.lock
+          git commit -m "release: archastro-sdk v$VERSION"
+          git push origin "$BRANCH"
+
+      - name: Create + push tag
+        env:
+          TAG: ${{ steps.bump.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "$TAG"
+
+      - name: Dispatch publish.yml for the tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.bump.outputs.tag }}
+        run: |
+          set -euo pipefail
+          echo "Dispatching publish.yml --ref $TAG"
+          gh workflow run publish.yml --ref "$TAG"
+
+      - name: Open PR + merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.bump.outputs.branch }}
+          VERSION: ${{ steps.bump.outputs.version }}
+          TAG: ${{ steps.bump.outputs.tag }}
+        run: |
+          set -euo pipefail
+          body=$(cat <<EOF
+          Automated release — version bump opened by \`release.yml\`.
+
+          **Tag pushed** (publish.yml is publishing right now):
+          - \`$TAG\`
+
+          This PR merges immediately so \`main\` stays in sync with what
+          was published. Tests already ran above; the bump is the only
+          change in this PR.
+          EOF
+          )
+          pr_url=$(gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "release: archastro-sdk v$VERSION" \
+            --body "$body")
+          gh pr merge "$pr_url" --squash --delete-branch
+          echo "Merged $pr_url"

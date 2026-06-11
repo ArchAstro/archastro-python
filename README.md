@@ -40,8 +40,8 @@ This repo contains:
 ### Setup
 
 ```bash
-npm ci           # channel-harness + prism (for contract tests)
-uv sync          # Python deps + dev deps (pytest, ruff)
+npm ci --ignore-scripts  # channel-harness + prism (for contract tests)
+uv sync --locked --all-extras
 ```
 
 ### Running tests
@@ -70,13 +70,11 @@ header; they'll be overwritten.
 ```
 
 The script fetches the spec from `ArchAstro/archastro-openapi@main` and
-runs the generator via `npx`. Knobs:
+runs the generator locked in `package-lock.json`. Knobs:
 
 - `ARCHASTRO_OPENAPI_REF=some-branch ./scripts/regenerate_sdk.sh` — pull
   the spec from a non-default ref (useful when a spec change is on a
   branch awaiting merge).
-- `ARCHASTRO_SDK_GENERATOR=@archastro/sdk-generator@0.1.0 ./scripts/regenerate_sdk.sh`
-  — pin the generator version for a release branch.
 
 After regenerating, review the diff, run the full test suite, and commit.
 
@@ -84,6 +82,7 @@ After regenerating, review the diff, run the full test suite, and commit.
 
 ```bash
 # bump version in pyproject.toml, then:
-uv build
+uv sync --locked --all-extras
+uv build --no-build-isolation
 uv publish
 ```
