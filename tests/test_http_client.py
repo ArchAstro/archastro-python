@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 import pytest
+from pydantic import BaseModel, ValidationError
 
 from archastro.platform.runtime.http_client import ApiError, HttpClient, SyncHttpClient
 
@@ -378,3 +379,355 @@ def test_sync_client_raises_structured_api_error():
     assert exc_info.value.status == 403
     assert exc_info.value.error_code == "forbidden"
     assert str(exc_info.value) == "no access"
+
+
+# ─── response_type deserialization ──────────────────────────────
+
+
+class _Widget(BaseModel):
+    id: str
+    count: int
+
+
+async def test_deserializes_into_response_type_model():
+    client = HttpClient(base_url="https://api.test")
+
+    with patch.object(
+        client._client,
+        "request",
+        return_value=_mock_response(200, {"id": "w_1", "count": 3}),
+    ):
+        result = await client.request("/api/v1/widgets/w_1", response_type=_Widget)
+
+    assert isinstance(result, _Widget)
+    assert result.id == "w_1"
+    assert result.count == 3
+
+
+async def test_deserializes_into_list_of_response_type_models():
+    client = HttpClient(base_url="https://api.test")
+    body = [{"id": "w_1", "count": 1}, {"id": "w_2", "count": 2}]
+    resp = httpx.Response(
+        status_code=200, json=body, request=httpx.Request("GET", "https://api.test")
+    )
+
+    with patch.object(client._client, "request", return_value=resp):
+        result = await client.request("/api/v1/widgets", response_type=list[_Widget])
+
+    assert isinstance(result, list)
+    assert all(isinstance(item, _Widget) for item in result)
+    assert [item.id for item in result] == ["w_1", "w_2"]
+
+
+async def test_returns_raw_dict_without_response_type():
+    client = HttpClient(base_url="https://api.test")
+
+    with patch.object(
+        client._client,
+        "request",
+        return_value=_mock_response(200, {"id": "w_1", "count": 3}),
+    ):
+        result = await client.request("/api/v1/widgets/w_1")
+
+    assert result == {"id": "w_1", "count": 3}
+    assert not isinstance(result, BaseModel)
+
+
+async def test_204_returns_none_without_response_type():
+    client = HttpClient(base_url="https://api.test")
+    resp = httpx.Response(status_code=204, request=httpx.Request("DELETE", "https://api.test"))
+
+    with patch.object(client._client, "request", return_value=resp):
+        result = await client.request("/api/v1/widgets/w_1", method="DELETE")
+
+    assert result is None
+
+
+async def test_204_with_response_type_raises_validation_error():
+    # A bodyless 204 on an operation that promises a typed body is a server
+    # contract violation and should fail at the call, not as a downstream
+    # AttributeError on None.
+    client = HttpClient(base_url="https://api.test")
+    resp = httpx.Response(status_code=204, request=httpx.Request("DELETE", "https://api.test"))
+
+    with patch.object(client._client, "request", return_value=resp):
+        with pytest.raises(ValidationError):
+            await client.request("/api/v1/widgets/w_1", method="DELETE", response_type=_Widget)
+
+
+async def test_invalid_payload_raises_validation_error():
+    client = HttpClient(base_url="https://api.test")
+
+    with patch.object(
+        client._client,
+        "request",
+        return_value=_mock_response(200, {"id": "w_1", "count": "not-a-number"}),
+    ):
+        with pytest.raises(ValidationError):
+            await client.request("/api/v1/widgets/w_1", response_type=_Widget)
+
+
+def test_sync_deserializes_into_response_type_model():
+    client = SyncHttpClient(base_url="https://api.test")
+
+    with patch.object(
+        client._client,
+        "request",
+        return_value=_mock_response(200, {"id": "w_1", "count": 3}),
+    ):
+        result = client.request("/api/v1/widgets/w_1", response_type=_Widget)
+
+    assert isinstance(result, _Widget)
+    assert result.id == "w_1"
+    assert result.count == 3
+
+
+def test_sync_deserializes_into_list_of_response_type_models():
+    client = SyncHttpClient(base_url="https://api.test")
+    body = [{"id": "w_1", "count": 1}, {"id": "w_2", "count": 2}]
+    resp = httpx.Response(
+        status_code=200, json=body, request=httpx.Request("GET", "https://api.test")
+    )
+
+    with patch.object(client._client, "request", return_value=resp):
+        result = client.request("/api/v1/widgets", response_type=list[_Widget])
+
+    assert isinstance(result, list)
+    assert all(isinstance(item, _Widget) for item in result)
+
+
+def test_sync_returns_raw_dict_without_response_type():
+    client = SyncHttpClient(base_url="https://api.test")
+
+    with patch.object(
+        client._client,
+        "request",
+        return_value=_mock_response(200, {"id": "w_1", "count": 3}),
+    ):
+        result = client.request("/api/v1/widgets/w_1")
+
+    assert result == {"id": "w_1", "count": 3}
+    assert not isinstance(result, BaseModel)
+
+
+def test_sync_204_returns_none_without_response_type():
+    client = SyncHttpClient(base_url="https://api.test")
+    resp = httpx.Response(status_code=204, request=httpx.Request("DELETE", "https://api.test"))
+
+    with patch.object(client._client, "request", return_value=resp):
+        result = client.request("/api/v1/widgets/w_1", method="DELETE")
+
+    assert result is None
+
+
+def test_sync_204_with_response_type_raises_validation_error():
+    client = SyncHttpClient(base_url="https://api.test")
+    resp = httpx.Response(status_code=204, request=httpx.Request("DELETE", "https://api.test"))
+
+    with patch.object(client._client, "request", return_value=resp):
+        with pytest.raises(ValidationError):
+            client.request("/api/v1/widgets/w_1", method="DELETE", response_type=_Widget)
+
+
+def test_sync_invalid_payload_raises_validation_error():
+    client = SyncHttpClient(base_url="https://api.test")
+
+    with patch.object(
+        client._client,
+        "request",
+        return_value=_mock_response(200, {"id": "w_1", "count": "not-a-number"}),
+    ):
+        with pytest.raises(ValidationError):
+            client.request("/api/v1/widgets/w_1", response_type=_Widget)
+
+
+# ─── request assembly, token sources, and error parsing ────────
+
+
+async def test_async_client_sends_auth_headers_query_and_json_body():
+    client = HttpClient(
+        base_url="https://api.test",
+        access_token="sat_test",
+        path_prefix="/proxy/v1",
+        default_headers={"x-archastro-api-key": "pk_test"},
+    )
+
+    with patch.object(
+        client._client,
+        "request",
+        new=AsyncMock(return_value=_mock_response(200, {"ok": True})),
+    ) as request:
+        result = await client.request(
+            "/api/v1/things",
+            method="POST",
+            body={"name": "demo"},
+            query={"limit": 10, "empty": None},
+        )
+
+    assert result == {"ok": True}
+    request.assert_called_once_with(
+        "POST",
+        "https://api.test/proxy/v1/things",
+        json={"name": "demo"},
+        headers={
+            "x-archastro-api-key": "pk_test",
+            "Content-Type": "application/json",
+            "Authorization": "Bearer sat_test",
+        },
+        params={"limit": 10},
+    )
+
+
+async def test_async_client_drops_body_and_keeps_path_for_get_outside_api_prefix():
+    client = HttpClient(base_url="https://api.test", path_prefix="/proxy/v1")
+
+    with patch.object(
+        client._client,
+        "request",
+        new=AsyncMock(return_value=_mock_response(200, {})),
+    ) as request:
+        await client.request("/health", body={"ignored": True})
+
+    request.assert_called_once_with(
+        "GET",
+        "https://api.test/health",
+        json=None,
+        headers={"Content-Type": "application/json"},
+        params=None,
+    )
+
+
+async def test_get_access_token_callable_takes_precedence_over_static_token():
+    client = HttpClient(
+        base_url="https://api.test",
+        access_token="static-token",
+        get_access_token=lambda: "dynamic-token",
+    )
+
+    with patch.object(
+        client._client,
+        "request",
+        new=AsyncMock(return_value=_mock_response(200, {})),
+    ) as request:
+        await client.request("/api/v1/things")
+
+    headers = request.call_args.kwargs["headers"]
+    assert headers["Authorization"] == "Bearer dynamic-token"
+
+
+def test_sync_get_access_token_callable_takes_precedence_over_static_token():
+    client = SyncHttpClient(
+        base_url="https://api.test",
+        access_token="static-token",
+        get_access_token=lambda: "dynamic-token",
+    )
+
+    with patch.object(
+        client._client,
+        "request",
+        return_value=_mock_response(200, {}),
+    ) as request:
+        client.request("/api/v1/things")
+
+    headers = request.call_args.kwargs["headers"]
+    assert headers["Authorization"] == "Bearer dynamic-token"
+
+
+async def test_async_client_request_raw_returns_bytes_and_mime_type():
+    client = HttpClient(base_url="https://api.test")
+    response = httpx.Response(
+        status_code=200,
+        content=b"hello",
+        headers={"content-type": "text/plain"},
+        request=httpx.Request("GET", "https://api.test"),
+    )
+
+    with patch.object(client._client, "request", new=AsyncMock(return_value=response)):
+        result = await client.request_raw("/api/v1/files/file_123/download")
+
+    assert result == {"content": b"hello", "mime_type": "text/plain"}
+
+
+def test_sync_client_throws_original_401_when_refresh_handler_fails():
+    def failing_handler() -> str:
+        raise RuntimeError("refresh token expired")
+
+    client = SyncHttpClient(
+        base_url="https://api.test",
+        access_token="expired-token",
+        on_refresh_token=failing_handler,
+    )
+
+    with patch.object(
+        client._client,
+        "request",
+        return_value=_mock_response(401, {"error": "unauthenticated"}),
+    ):
+        with pytest.raises(ApiError) as exc_info:
+            client.request("/api/v1/things")
+
+    assert exc_info.value.status == 401
+
+
+def test_error_code_falls_back_to_type_when_code_missing():
+    client = SyncHttpClient(base_url="https://api.test")
+
+    with patch.object(
+        client._client,
+        "request",
+        return_value=_mock_response(
+            422, {"error": {"type": "invalid_request", "message": "bad input"}}
+        ),
+    ):
+        with pytest.raises(ApiError) as exc_info:
+            client.request("/api/v1/things")
+
+    assert exc_info.value.error_code == "invalid_request"
+    assert str(exc_info.value) == "bad input"
+
+
+def test_string_error_body_used_as_code_and_message():
+    client = SyncHttpClient(base_url="https://api.test")
+
+    with patch.object(
+        client._client,
+        "request",
+        return_value=_mock_response(400, {"error": "bad_thing"}),
+    ):
+        with pytest.raises(ApiError) as exc_info:
+            client.request("/api/v1/things")
+
+    assert exc_info.value.error_code == "bad_thing"
+    assert str(exc_info.value) == "bad_thing"
+
+
+def test_message_only_error_body_keeps_unknown_code():
+    client = SyncHttpClient(base_url="https://api.test")
+
+    with patch.object(
+        client._client,
+        "request",
+        return_value=_mock_response(400, {"message": "boom"}),
+    ):
+        with pytest.raises(ApiError) as exc_info:
+            client.request("/api/v1/things")
+
+    assert exc_info.value.error_code == "unknown_error"
+    assert str(exc_info.value) == "boom"
+
+
+def test_non_json_error_body_falls_back_to_http_status_message():
+    client = SyncHttpClient(base_url="https://api.test")
+    response = httpx.Response(
+        status_code=500,
+        content=b"<html>Internal Server Error</html>",
+        headers={"content-type": "text/html"},
+        request=httpx.Request("GET", "https://api.test"),
+    )
+
+    with patch.object(client._client, "request", return_value=response):
+        with pytest.raises(ApiError) as exc_info:
+            client.request("/api/v1/things")
+
+    assert exc_info.value.error_code == "unknown_error"
+    assert str(exc_info.value) == "HTTP 500"
