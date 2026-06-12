@@ -1,17 +1,144 @@
-# archastro-python
+# ArchAstro Python SDK
 
-Python SDK for the ArchAstro Platform API.
+Python SDK for the ArchAstro Platform API and ArchAgents runtime APIs.
 
 ```bash
-uv add archastro-sdk      # or: pip install archastro-sdk
+uv add archastro-sdk
+# or
+pip install archastro-sdk
+```
+
+The clients default to the production API gateway, `https://platform.archastro.ai`.
+Set `ARCHASTRO_PLATFORM_BASE_URL` only when targeting local development,
+staging, or another non-production environment.
+
+## Getting Started
+
+Choose the auth path that matches how your Python process should run.
+
+### ArchAgents Org Bot or Worker
+
+Use this path for ArchAgents bots, background workers, cron jobs, ingestion
+jobs, and integrations that should act as an org-owned system user. Your Python
+process only needs a system-user access token:
+
+```bash
+export ARCHASTRO_ACCESS_TOKEN=sat_...
+```
+
+Create that token with `archagent` while logged in as an org admin:
+
+```bash
+archagent auth login
+export ARCHASTRO_ORG_ID=org_...
+
+export ARCHASTRO_SYSTEM_USER_ID="$(
+  archagent --json create user \
+    --system-user \
+    --name "Python SDK Bot" \
+    --org "$ARCHASTRO_ORG_ID" \
+    --org-role member |
+  jq -r '.id'
+)"
+
+export ARCHASTRO_ACCESS_TOKEN="$(
+  archagent --json create usertoken \
+    --user "$ARCHASTRO_SYSTEM_USER_ID" \
+    --name "python-sdk-service" |
+  jq -r '.token'
+)"
+```
+
+Use the sync client for scripts and CLIs:
+
+```python
+import os
+
+from archastro.platform import PlatformClient
+
+with PlatformClient(access_token=os.environ["ARCHASTRO_ACCESS_TOKEN"]) as client:
+    user = client.users.me()
+
+print(user["id"], user.get("is_system_user"))
+```
+
+Use the async client inside async services or workers:
+
+```python
+import asyncio
+import os
+
+from archastro.platform import AsyncPlatformClient
+
+
+async def main() -> None:
+    async with AsyncPlatformClient(
+        access_token=os.environ["ARCHASTRO_ACCESS_TOKEN"],
+    ) as client:
+        user = await client.users.me()
+
+    print(user["id"], user.get("is_system_user"))
+
+
+asyncio.run(main())
+```
+
+See [`examples/org_system_user_token`](examples/org_system_user_token) for the
+complete system-user walkthrough.
+
+### Developer App Auth
+
+Use this path when you already have a publishable API key and a user access
+token from a developer app login flow.
+
+```bash
+export ARCHASTRO_API_KEY=pk_...
+export ARCHASTRO_ACCESS_TOKEN=sat_...
 ```
 
 ```python
-from archastro import ArchAstro
+import os
 
-client = ArchAstro(api_key="pk_...")
-teams = client.v1.teams.list()
+from archastro.platform import PlatformClient
+
+client = PlatformClient.with_token(
+    os.environ["ARCHASTRO_API_KEY"],
+    os.environ["ARCHASTRO_ACCESS_TOKEN"],
+)
+
+with client:
+    teams = client.teams.list()
 ```
+
+Async setup uses the same factory:
+
+```python
+import asyncio
+import os
+
+from archastro.platform import AsyncPlatformClient
+
+
+async def main() -> None:
+    async with AsyncPlatformClient.with_token(
+        os.environ["ARCHASTRO_API_KEY"],
+        os.environ["ARCHASTRO_ACCESS_TOKEN"],
+    ) as client:
+        teams = await client.teams.list()
+        print(teams)
+
+
+asyncio.run(main())
+```
+
+## Examples
+
+- [`examples/org_system_user_token`](examples/org_system_user_token) — run the
+  SDK as an ArchAgents org-owned system user.
+- [`examples/create_agent_cli`](examples/create_agent_cli) — wrap the sync SDK
+  in a small CLI that creates an agent.
+- [`examples/thread_chat_tui`](examples/thread_chat_tui) — chat in an existing
+  thread from a terminal UI using the async websocket helpers.
 
 ## Packages
 
