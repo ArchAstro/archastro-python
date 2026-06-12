@@ -1,12 +1,12 @@
 # Copyright (c) 2026 ArchAstro Inc. All Rights Reserved.
 """Unit tests for HttpClient 401 auto-refresh — mirrors the TS test suite."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 import pytest
 
-from archastro.platform.runtime.http_client import ApiError, HttpClient
+from archastro.platform.runtime.http_client import ApiError, HttpClient, SyncHttpClient
 
 
 def _mock_response(status: int, body: dict | None = None) -> httpx.Response:
@@ -253,3 +253,128 @@ async def test_clears_refresh_task_after_failure_so_future_refreshes_work():
 
     assert result == {"id": "ok"}
     assert attempt == 2
+
+
+def test_sync_client_sends_auth_headers_query_and_json_body():
+    client = SyncHttpClient(
+        base_url="https://api.test",
+        access_token="sat_test",
+        path_prefix="/proxy/v1",
+        default_headers={"x-archastro-api-key": "pk_test"},
+    )
+
+    with patch.object(
+        client._client,
+        "request",
+        return_value=_mock_response(200, {"ok": True}),
+    ) as request:
+        result = client.request(
+            "/api/v1/things",
+            method="POST",
+            body={"name": "demo"},
+            query={"limit": 10, "empty": None},
+        )
+
+    assert result == {"ok": True}
+    request.assert_called_once_with(
+        "POST",
+        "https://api.test/proxy/v1/things",
+        json={"name": "demo"},
+        headers={
+            "x-archastro-api-key": "pk_test",
+            "Content-Type": "application/json",
+            "Authorization": "Bearer sat_test",
+        },
+        params={"limit": 10},
+    )
+
+
+def test_sync_client_retries_with_new_token_after_401():
+    refresh_handler = Mock(return_value="fresh-token")
+    client = SyncHttpClient(
+        base_url="https://api.test",
+        access_token="expired-token",
+        on_refresh_token=refresh_handler,
+    )
+    responses = [
+        _mock_response(401, {"error": "unauthenticated", "message": "expired"}),
+        _mock_response(200, {"id": "123"}),
+    ]
+
+    with patch.object(client._client, "request", side_effect=responses) as request:
+        result = client.request("/api/v1/things")
+
+    assert result == {"id": "123"}
+    assert request.call_count == 2
+    refresh_handler.assert_called_once_with()
+    assert request.call_args_list[1].kwargs["headers"]["Authorization"] == "Bearer fresh-token"
+
+
+def test_sync_client_does_not_retry_auth_paths():
+    refresh_handler = Mock(return_value="fresh-token")
+    client = SyncHttpClient(
+        base_url="https://api.test",
+        access_token="expired-token",
+        on_refresh_token=refresh_handler,
+    )
+
+    with patch.object(
+        client._client,
+        "request",
+        return_value=_mock_response(401, {"error": "unauthenticated"}),
+    ):
+        with pytest.raises(ApiError) as exc_info:
+            client.request("/api/v1/auth/refresh", method="POST")
+
+    assert exc_info.value.status == 401
+    refresh_handler.assert_not_called()
+
+
+def test_sync_refresh_only_client_throws_on_non_auth_paths():
+    client = SyncHttpClient(base_url="https://api.test", refresh_only=True)
+
+    with pytest.raises(RuntimeError, match="Refresh-only HTTP client"):
+        client.request("/api/v1/agents")
+
+    with patch.object(
+        client._client,
+        "request",
+        return_value=_mock_response(200, {"token": "t"}),
+    ):
+        result = client.request("/api/v1/auth/refresh", method="POST")
+
+    assert result == {"token": "t"}
+
+
+def test_sync_client_request_raw_returns_bytes_and_mime_type():
+    client = SyncHttpClient(base_url="https://api.test")
+    response = httpx.Response(
+        status_code=200,
+        content=b"hello",
+        headers={"content-type": "text/plain"},
+        request=httpx.Request("GET", "https://api.test"),
+    )
+
+    with patch.object(client._client, "request", return_value=response):
+        result = client.request_raw("/api/v1/files/file_123/download")
+
+    assert result == {"content": b"hello", "mime_type": "text/plain"}
+
+
+def test_sync_client_raises_structured_api_error():
+    client = SyncHttpClient(base_url="https://api.test")
+
+    with patch.object(
+        client._client,
+        "request",
+        return_value=_mock_response(
+            403,
+            {"error": {"code": "forbidden", "message": "no access"}},
+        ),
+    ):
+        with pytest.raises(ApiError) as exc_info:
+            client.request("/api/v1/things")
+
+    assert exc_info.value.status == 403
+    assert exc_info.value.error_code == "forbidden"
+    assert str(exc_info.value) == "no access"
