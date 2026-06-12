@@ -6,11 +6,21 @@ from __future__ import annotations
 import asyncio
 import threading
 from collections.abc import Callable, Coroutine
-from typing import Any
+from functools import cache
+from typing import Any, TypeVar, overload
 
 import httpx
+from pydantic import TypeAdapter
 
 DEFAULT_API_PREFIX = "/api/v1"
+
+T = TypeVar("T")
+
+
+@cache
+def _type_adapter(tp: Any) -> TypeAdapter[Any]:
+    """Cache adapters per response type; TypeAdapter construction is costly."""
+    return TypeAdapter(tp)
 
 
 class ApiError(Exception):
@@ -164,6 +174,7 @@ class HttpClient:
 
         return response
 
+    @overload
     async def request(
         self,
         path: str,
@@ -172,13 +183,52 @@ class HttpClient:
         body: Any = None,
         headers: dict[str, str] | None = None,
         query: dict[str, Any] | None = None,
-    ) -> Any:
+        response_type: type[T],
+    ) -> T: ...
+
+    @overload
+    async def request(
+        self,
+        path: str,
+        *,
+        method: str = "GET",
+        body: Any = None,
+        headers: dict[str, str] | None = None,
+        query: dict[str, Any] | None = None,
+        response_type: None = None,
+    ) -> Any: ...
+
+    async def request(
+        self,
+        path: str,
+        *,
+        method: str = "GET",
+        body: Any = None,
+        headers: dict[str, str] | None = None,
+        query: dict[str, Any] | None = None,
+        response_type: type[T] | None = None,
+    ) -> T | Any:
+        """Issue a request and return the JSON body.
+
+        With `response_type`, the body is validated into that type (a Pydantic
+        model or a generic alias like list[Model]); a bodyless 204 then raises
+        ValidationError, since the operation promised a typed body. Without
+        `response_type`, the raw parsed JSON is returned, or None on 204.
+        """
         response = await self._execute(path, method=method, body=body, headers=headers, query=query)
 
         if response.status_code == 204:
-            return None
+            if response_type is None:
+                return None
+            # A 204 on an operation that promises a typed body is a server
+            # contract violation; validating None fails loudly here instead
+            # of surfacing later as an AttributeError far from the call.
+            return _type_adapter(response_type).validate_python(None)
 
-        return response.json()
+        raw = response.json()
+        if response_type is None:
+            return raw
+        return _type_adapter(response_type).validate_python(raw)
 
     async def request_raw(
         self,
@@ -318,6 +368,7 @@ class SyncHttpClient:
 
         return response
 
+    @overload
     def request(
         self,
         path: str,
@@ -326,13 +377,52 @@ class SyncHttpClient:
         body: Any = None,
         headers: dict[str, str] | None = None,
         query: dict[str, Any] | None = None,
-    ) -> Any:
+        response_type: type[T],
+    ) -> T: ...
+
+    @overload
+    def request(
+        self,
+        path: str,
+        *,
+        method: str = "GET",
+        body: Any = None,
+        headers: dict[str, str] | None = None,
+        query: dict[str, Any] | None = None,
+        response_type: None = None,
+    ) -> Any: ...
+
+    def request(
+        self,
+        path: str,
+        *,
+        method: str = "GET",
+        body: Any = None,
+        headers: dict[str, str] | None = None,
+        query: dict[str, Any] | None = None,
+        response_type: type[T] | None = None,
+    ) -> T | Any:
+        """Issue a request and return the JSON body.
+
+        With `response_type`, the body is validated into that type (a Pydantic
+        model or a generic alias like list[Model]); a bodyless 204 then raises
+        ValidationError, since the operation promised a typed body. Without
+        `response_type`, the raw parsed JSON is returned, or None on 204.
+        """
         response = self._execute(path, method=method, body=body, headers=headers, query=query)
 
         if response.status_code == 204:
-            return None
+            if response_type is None:
+                return None
+            # A 204 on an operation that promises a typed body is a server
+            # contract violation; validating None fails loudly here instead
+            # of surfacing later as an AttributeError far from the call.
+            return _type_adapter(response_type).validate_python(None)
 
-        return response.json()
+        raw = response.json()
+        if response_type is None:
+            return raw
+        return _type_adapter(response_type).validate_python(raw)
 
     def request_raw(
         self,
