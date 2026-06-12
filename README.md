@@ -50,6 +50,9 @@ uv sync --locked --all-extras
 # Unit tests only (no external services needed)
 uv run pytest tests/test_http_client.py src/archastro/phx_channel/tests/test_unit.py
 
+# Example smoke/unit tests
+uv run pytest tests/examples
+
 # REST contract tests (spawns Prism mock server)
 uv run pytest tests/contract
 

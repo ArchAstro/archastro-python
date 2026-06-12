@@ -57,7 +57,7 @@ jobs:
         run: uv run ruff format --check
 
       - name: Unit tests
-        run: uv run pytest tests/test_http_client.py src/archastro/phx_channel/tests/test_unit.py
+        run: uv run pytest tests/test_http_client.py src/archastro/phx_channel/tests/test_unit.py tests/examples
 
       - name: Harness-client integration tests
         run: uv run pytest tests/harness
