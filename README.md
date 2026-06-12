@@ -26,11 +26,17 @@ process only needs a system-user access token:
 export ARCHASTRO_ACCESS_TOKEN=sat_...
 ```
 
-Create that token with `archagent` while logged in as an org admin:
+Create that token with `archagent` while logged in as an org admin. Replace
+`user@company.com` with your ArchAgents login email. The setup is grouped as
+one shell block so GitHub's copy button copies the full sequence:
 
 ```bash
-archagent auth login
-export ARCHASTRO_ORG_ID=org_...
+archagent auth login user@company.com
+
+export ARCHASTRO_ORG_ID="$(
+  archagent describe me --json |
+  jq -er '.session.org'
+)"
 
 export ARCHASTRO_SYSTEM_USER_ID="$(
   archagent --json create user \

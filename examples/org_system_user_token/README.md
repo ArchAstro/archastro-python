@@ -77,17 +77,18 @@ asyncio.run(main())
 ## If You Are an ArchAgents User
 
 If you are already using ArchAgents and can log in as an org admin, create the
-system user and token with `archagent`.
+system user and token with `archagent`. Replace `user@company.com` with your
+ArchAgents login email. GitHub adds a copy button to fenced code blocks, so this
+setup is kept as one complete shell block.
 
 ```bash
-archagent auth login
-export ARCHASTRO_ORG_ID=org_...
-```
+archagent auth login user@company.com
 
-Create an org-scoped system user. `member` is the safest default role for most
-bots and integrations.
+export ARCHASTRO_ORG_ID="$(
+  archagent describe me --json |
+  jq -er '.session.org'
+)"
 
-```bash
 export ARCHASTRO_SYSTEM_USER_ID="$(
   archagent --json create user \
     --system-user \
@@ -96,12 +97,7 @@ export ARCHASTRO_SYSTEM_USER_ID="$(
     --org-role member |
   jq -r '.id'
 )"
-```
 
-Create a token for that system user. The raw token is shown once, so put it in
-your secret manager immediately.
-
-```bash
 export ARCHASTRO_ACCESS_TOKEN="$(
   archagent --json create usertoken \
     --user "$ARCHASTRO_SYSTEM_USER_ID" \
@@ -109,6 +105,10 @@ export ARCHASTRO_ACCESS_TOKEN="$(
   jq -r '.token'
 )"
 ```
+
+The system user is org-scoped. `member` is the safest default role for most bots
+and integrations. The raw token is shown once, so put
+`ARCHASTRO_ACCESS_TOKEN` in your secret manager immediately.
 
 Now run your Python service with `ARCHASTRO_ACCESS_TOKEN` in its environment.
 Only set `ARCHASTRO_PLATFORM_BASE_URL` when targeting local development,
@@ -118,11 +118,17 @@ staging, or another non-production environment.
 
 Use `archastro` when you need to bootstrap the system user from a developer app
 context instead of an ArchAgents org session. Run from an initialized ArchAstro
-project, or pass `--app <app_id>` to each command.
+project, or pass `--app <app_id>` to each command. Replace `Example Org` with
+the org name, slug, or domain you want to bootstrap.
 
 ```bash
 archastro auth login
-export ARCHASTRO_ORG_ID=org_...
+
+export ARCHASTRO_ORG_SEARCH="Example Org"
+export ARCHASTRO_ORG_ID="$(
+  archastro --json list orgs --search "$ARCHASTRO_ORG_SEARCH" |
+  jq -er '.data[0].id'
+)"
 
 export ARCHASTRO_SYSTEM_USER_ID="$(
   archastro --json create user \
