@@ -2,6 +2,11 @@
 
 Python SDK for the ArchAstro Platform API and ArchAgents runtime APIs.
 
+## Documentation
+
+API reference documentation is published at
+[archastro.github.io/archastro-python](https://archastro.github.io/archastro-python/).
+
 ```bash
 uv add archastro-sdk
 # or
@@ -213,6 +218,20 @@ runs the generator locked in `package-lock.json`. Knobs:
   branch awaiting merge).
 
 After regenerating, review the diff, run the full test suite, and commit.
+
+### Building docs
+
+API documentation is generated with
+[`pdoc`](https://pdoc.dev/docs/pdoc.html) from the installed package source.
+
+```bash
+bash scripts/build_docs.sh
+```
+
+The rendered static site is written to `site/`. The docs workflow builds the
+same site for pull requests and deploys
+[the hosted API reference](https://archastro.github.io/archastro-python/) to
+GitHub Pages from `main`.
 
 ## Release
 
