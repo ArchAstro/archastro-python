@@ -6,6 +6,8 @@ Python SDK for the ArchAstro Platform API and ArchAgents runtime APIs.
 
 API reference documentation is published at
 [archastro.github.io/archastro-python](https://archastro.github.io/archastro-python/).
+Start with the guide pages for authentication and integration scenarios, then
+use the generated API reference for exact modules, classes, and fields.
 
 ```bash
 uv add archastro-sdk
@@ -70,7 +72,7 @@ from archastro.platform import PlatformClient
 with PlatformClient(access_token=os.environ["ARCHASTRO_ACCESS_TOKEN"]) as client:
     user = client.users.me()
 
-print(user["id"], user.get("is_system_user"))
+print(user.id, user.is_system_user)
 ```
 
 Use the async client inside async services or workers:
@@ -88,7 +90,7 @@ async def main() -> None:
     ) as client:
         user = await client.users.me()
 
-    print(user["id"], user.get("is_system_user"))
+    print(user.id, user.is_system_user)
 
 
 asyncio.run(main())
@@ -150,6 +152,9 @@ asyncio.run(main())
   in a small CLI that creates an agent.
 - [`examples/thread_chat_tui`](examples/thread_chat_tui) — chat in an existing
   thread from a terminal UI using the async websocket helpers.
+
+The hosted documentation also includes scenario-oriented guide pages for
+authentication, listing teams, and creating agents.
 
 ## Packages
 
