@@ -11,3 +11,5 @@ uv run pdoc \
   --output-directory site \
   --docformat google \
   --footer-text "ArchAstro Python SDK"
+
+uv run python scripts/render_docs_pages.py
