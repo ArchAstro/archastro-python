@@ -48,6 +48,7 @@ exclude = ["**/tests/**"]
 [dependency-groups]
 dev = [
     "hatchling>=1.27",
+    "pdoc>=16.0.0",
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
     "ruff>=0.11",
