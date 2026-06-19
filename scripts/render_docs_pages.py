@@ -5,7 +5,6 @@ from pathlib import Path
 
 import markdown2
 
-
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 SITE = ROOT / "site"
@@ -30,8 +29,7 @@ def main() -> None:
 
 def render_page(title: str, body: str) -> str:
     nav_items = "\n".join(
-        f'<li><a href="{escape(output)}">{escape(label)}</a></li>'
-        for _, output, label in PAGES
+        f'<li><a href="{escape(output)}">{escape(label)}</a></li>' for _, output, label in PAGES
     )
     return f"""<!doctype html>
 <html lang="en">
