@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
-from collections.abc import Callable, Coroutine
+from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
 from functools import cache
 from typing import Any, TypeVar, overload
 
@@ -246,6 +247,72 @@ class HttpClient:
             "mime_type": response.headers.get("content-type", "text/plain"),
         }
 
+    async def stream_sse(
+        self,
+        path: str,
+        *,
+        method: str = "GET",
+        body: Any = None,
+        headers: dict[str, str] | None = None,
+        query: dict[str, Any] | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Open a Server-Sent Events stream, yielding parsed ``{"event", "data"}``.
+
+        Backs the generated async ``stream()`` methods for ``x-sdk-streaming``
+        endpoints. Raises :class:`ApiError` on a non-2xx response before the
+        stream opens. (Token refresh is not retried mid-stream.)
+        """
+        auth_prefix = f"{DEFAULT_API_PREFIX}/auth/"
+        if self._refresh_only and not path.startswith(auth_prefix):
+            raise RuntimeError(
+                f"Refresh-only HTTP client cannot make requests outside {auth_prefix}"
+            )
+
+        url = f"{self._base_url}{self._transform_path(path)}"
+        sends_body = body is not None and method not in ("GET", "HEAD")
+        req_headers = {**self._default_headers, "Accept": "text/event-stream"}
+        if sends_body:
+            req_headers["Content-Type"] = "application/json"
+        token = self._get_token()
+        if token:
+            req_headers["Authorization"] = f"Bearer {token}"
+        if headers:
+            req_headers.update(headers)
+        params = {k: v for k, v in (query or {}).items() if v is not None} or None
+
+        async with self._client.stream(
+            method,
+            url,
+            json=body if sends_body else None,
+            headers=req_headers,
+            params=params,
+        ) as response:
+            if response.status_code >= 400:
+                await response.aread()
+                raw: dict[str, Any] = {}
+                try:
+                    raw = response.json()
+                except Exception:
+                    pass
+                code, message = _parse_error(raw, response.status_code)
+                raise ApiError(response.status_code, code, message, raw)
+
+            event: str | None = None
+            data_lines: list[str] = []
+            async for line in response.aiter_lines():
+                if line == "":
+                    parsed = _build_sse_event(event, data_lines)
+                    if parsed is not None:
+                        yield parsed
+                    event, data_lines = None, []
+                elif line.startswith("event:"):
+                    event = line[6:].strip()
+                elif line.startswith("data:"):
+                    data_lines.append(line[5:].strip())
+            parsed = _build_sse_event(event, data_lines)
+            if parsed is not None:
+                yield parsed
+
     async def close(self) -> None:
         await self._client.aclose()
 
@@ -440,8 +507,85 @@ class SyncHttpClient:
             "mime_type": response.headers.get("content-type", "text/plain"),
         }
 
+    def stream_sse_sync(
+        self,
+        path: str,
+        *,
+        method: str = "GET",
+        body: Any = None,
+        headers: dict[str, str] | None = None,
+        query: dict[str, Any] | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        """Synchronous counterpart to :meth:`HttpClient.stream_sse`.
+
+        Backs the generated sync ``stream()`` methods. Raises :class:`ApiError`
+        on a non-2xx response before the stream opens.
+        """
+        auth_prefix = f"{DEFAULT_API_PREFIX}/auth/"
+        if self._refresh_only and not path.startswith(auth_prefix):
+            raise RuntimeError(
+                f"Refresh-only HTTP client cannot make requests outside {auth_prefix}"
+            )
+
+        url = f"{self._base_url}{self._transform_path(path)}"
+        sends_body = body is not None and method not in ("GET", "HEAD")
+        req_headers = {**self._default_headers, "Accept": "text/event-stream"}
+        if sends_body:
+            req_headers["Content-Type"] = "application/json"
+        token = self._get_token()
+        if token:
+            req_headers["Authorization"] = f"Bearer {token}"
+        if headers:
+            req_headers.update(headers)
+        params = {k: v for k, v in (query or {}).items() if v is not None} or None
+
+        with self._client.stream(
+            method,
+            url,
+            json=body if sends_body else None,
+            headers=req_headers,
+            params=params,
+        ) as response:
+            if response.status_code >= 400:
+                response.read()
+                raw: dict[str, Any] = {}
+                try:
+                    raw = response.json()
+                except Exception:
+                    pass
+                code, message = _parse_error(raw, response.status_code)
+                raise ApiError(response.status_code, code, message, raw)
+
+            event: str | None = None
+            data_lines: list[str] = []
+            for line in response.iter_lines():
+                if line == "":
+                    parsed = _build_sse_event(event, data_lines)
+                    if parsed is not None:
+                        yield parsed
+                    event, data_lines = None, []
+                elif line.startswith("event:"):
+                    event = line[6:].strip()
+                elif line.startswith("data:"):
+                    data_lines.append(line[5:].strip())
+            parsed = _build_sse_event(event, data_lines)
+            if parsed is not None:
+                yield parsed
+
     def close(self) -> None:
         self._client.close()
+
+
+def _build_sse_event(event: str | None, data_lines: list[str]) -> dict[str, Any] | None:
+    """Assemble one SSE frame into ``{"event", "data"}``; ``None`` if empty."""
+    if event is None and not data_lines:
+        return None
+    raw = "\n".join(data_lines)
+    try:
+        data: Any = json.loads(raw)
+    except Exception:
+        data = raw
+    return {"event": event or "message", "data": data}
 
 
 def _parse_error(raw_data: dict[str, Any], status: int) -> tuple[str, str]:
