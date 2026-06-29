@@ -731,3 +731,128 @@ def test_non_json_error_body_falls_back_to_http_status_message():
 
     assert exc_info.value.error_code == "unknown_error"
     assert str(exc_info.value) == "HTTP 500"
+
+
+# ─── SSE streaming (stream_sse / stream_sse_sync) ──────────────────
+
+
+class _FakeAsyncResponse:
+    def __init__(self, status_code, lines, json_body=None):
+        self.status_code = status_code
+        self._lines = lines
+        self._json = json_body or {}
+
+    async def aiter_lines(self):
+        for line in self._lines:
+            yield line
+
+    async def aread(self):
+        return b""
+
+    def json(self):
+        return self._json
+
+
+class _FakeAsyncStream:
+    def __init__(self, response):
+        self._response = response
+
+    async def __aenter__(self):
+        return self._response
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class _FakeSyncResponse:
+    def __init__(self, status_code, lines, json_body=None):
+        self.status_code = status_code
+        self._lines = lines
+        self._json = json_body or {}
+
+    def iter_lines(self):
+        yield from self._lines
+
+    def read(self):
+        return b""
+
+    def json(self):
+        return self._json
+
+
+class _FakeSyncStream:
+    def __init__(self, response):
+        self._response = response
+
+    def __enter__(self):
+        return self._response
+
+    def __exit__(self, *exc):
+        return False
+
+
+_SSE_LINES = [
+    "event: chunk",
+    'data: {"text": "He"}',
+    "",
+    "event: chunk",
+    'data: {"text": "llo"}',
+    "",
+    "event: done",
+    'data: {"ok": true}',
+    "",
+]
+
+
+async def test_stream_sse_yields_parsed_events_and_sends_body():
+    client = HttpClient(base_url="https://api.test")
+    resp = _FakeAsyncResponse(200, _SSE_LINES)
+    with patch.object(client._client, "stream", return_value=_FakeAsyncStream(resp)) as m:
+        events = [
+            ev
+            async for ev in client.stream_sse(
+                "/api/v1/echo/stream", method="POST", body={"prompt": "hi"}
+            )
+        ]
+
+    assert events == [
+        {"event": "chunk", "data": {"text": "He"}},
+        {"event": "chunk", "data": {"text": "llo"}},
+        {"event": "done", "data": {"ok": True}},
+    ]
+    _, kwargs = m.call_args
+    assert kwargs["json"] == {"prompt": "hi"}
+    assert kwargs["headers"]["Accept"] == "text/event-stream"
+
+
+async def test_stream_sse_raises_apierror_on_non_2xx():
+    client = HttpClient(base_url="https://api.test")
+    resp = _FakeAsyncResponse(
+        402, [], json_body={"error": {"code": "plan_not_entitled", "message": "no"}}
+    )
+    with patch.object(client._client, "stream", return_value=_FakeAsyncStream(resp)):
+        with pytest.raises(ApiError) as exc_info:
+            [ev async for ev in client.stream_sse("/api/v1/x/stream", method="POST", body={})]
+    assert exc_info.value.status == 402
+
+
+def test_stream_sse_sync_yields_parsed_events():
+    client = SyncHttpClient(base_url="https://api.test")
+    resp = _FakeSyncResponse(200, _SSE_LINES)
+    with patch.object(client._client, "stream", return_value=_FakeSyncStream(resp)):
+        events = list(
+            client.stream_sse_sync("/api/v1/echo/stream", method="POST", body={"prompt": "hi"})
+        )
+    assert events == [
+        {"event": "chunk", "data": {"text": "He"}},
+        {"event": "chunk", "data": {"text": "llo"}},
+        {"event": "done", "data": {"ok": True}},
+    ]
+
+
+def test_stream_sse_sync_raises_apierror_on_non_2xx():
+    client = SyncHttpClient(base_url="https://api.test")
+    resp = _FakeSyncResponse(401, [], json_body={"error": "unauthenticated"})
+    with patch.object(client._client, "stream", return_value=_FakeSyncStream(resp)):
+        with pytest.raises(ApiError):
+            list(client.stream_sse_sync("/api/v1/x/stream", method="POST", body={}))
