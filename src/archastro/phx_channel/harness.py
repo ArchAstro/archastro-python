@@ -81,6 +81,18 @@ class HarnessServiceClient:
         if r.status_code != 201:
             raise HarnessServiceError(f"register_scenario failed: {r.status_code} {r.text}")
 
+    async def register_stream_scenario(self, scenario: dict[str, Any]) -> None:
+        """Register a scenario for an SSE streaming route (``"METHOD /path"``).
+
+        See the TS ``StreamScenarioRequest`` / ``StreamAction`` types for the
+        JSON shape — the server validates and returns 400 on invalid bodies.
+        """
+        r = await self._http.post(f"{self.control_url}/stream-scenarios", json=scenario)
+        if r.status_code != 201:
+            raise HarnessServiceError(
+                f"register_stream_scenario failed: {r.status_code} {r.text}"
+            )
+
     async def observations(
         self, topic: str | None = None, event: str | None = None
     ) -> list[dict[str, Any]]:
