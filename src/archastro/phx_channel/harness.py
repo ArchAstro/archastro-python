@@ -89,9 +89,7 @@ class HarnessServiceClient:
         """
         r = await self._http.post(f"{self.control_url}/stream-scenarios", json=scenario)
         if r.status_code != 201:
-            raise HarnessServiceError(
-                f"register_stream_scenario failed: {r.status_code} {r.text}"
-            )
+            raise HarnessServiceError(f"register_stream_scenario failed: {r.status_code} {r.text}")
 
     async def observations(
         self, topic: str | None = None, event: str | None = None
