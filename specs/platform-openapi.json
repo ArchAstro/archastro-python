@@ -1,6 +1,180 @@
 {
   "components": {
     "schemas": {
+      "AIChatStreamDone": {
+        "description": "Terminal event marking the end of a streaming chat completion (SSE `done` event).",
+        "example": {
+          "finish_reason": "stop",
+          "run_count": 1,
+          "total_usage": {},
+          "usage": {}
+        },
+        "properties": {
+          "finish_reason": {
+            "description": "The overall finish reason for the completion.",
+            "example": "stop",
+            "type": "string"
+          },
+          "run_count": {
+            "description": "Number of model runs executed, including continuations triggered by tool calls.",
+            "example": 1,
+            "type": "integer"
+          },
+          "total_usage": {
+            "description": "Aggregate token usage across every run in the completion (including tool-call continuations), keyed by model ID.",
+            "example": {},
+            "type": "object"
+          },
+          "usage": {
+            "description": "Token usage for the final run, keyed by model ID.",
+            "example": {},
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "AIChatStreamError": {
+        "description": "Terminal error event for a streaming chat completion (SSE `error` event).",
+        "example": {
+          "message": "string"
+        },
+        "properties": {
+          "message": {
+            "description": "Human-readable description of the error that terminated the stream.",
+            "example": "string",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "type": "object"
+      },
+      "AIChatStreamMessageComplete": {
+        "description": "The fully assembled assistant message for one run of a streaming chat completion (SSE `message_complete` event).",
+        "example": {
+          "finish_reason": "stop",
+          "message": {
+            "content": "How can I help you today?",
+            "content_parts": [
+              {}
+            ],
+            "resume_token": "string",
+            "role": "user",
+            "tool_calls": [
+              {
+                "arguments": {},
+                "id": "string",
+                "name": "Example Name",
+                "thought_signature": "string"
+              }
+            ],
+            "tool_results": [
+              {
+                "content": "string",
+                "id": "string",
+                "name": "Example Name"
+              }
+            ]
+          },
+          "usage": {}
+        },
+        "properties": {
+          "finish_reason": {
+            "description": "Why the model stopped generating this message, e.g. `\"stop\"`, `\"length\"`, or `\"tool_calls\"`.",
+            "example": "stop",
+            "type": "string"
+          },
+          "message": {
+            "$ref": "#/components/schemas/AIMessage",
+            "description": "The complete assistant message for this run, assembled from the preceding deltas."
+          },
+          "usage": {
+            "description": "Token consumption for this run, keyed by model ID. `null` when usage data is unavailable.",
+            "example": {},
+            "type": "object"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "type": "object"
+      },
+      "AIChatStreamMessageDelta": {
+        "description": "Incremental assistant text emitted during a streaming chat completion (SSE `message_delta` event).",
+        "example": {
+          "delta": "string"
+        },
+        "properties": {
+          "delta": {
+            "description": "The chunk of assistant text produced since the previous `message_delta` event. Concatenate deltas in order to reconstruct the message.",
+            "example": "string",
+            "type": "string"
+          }
+        },
+        "required": [
+          "delta"
+        ],
+        "type": "object"
+      },
+      "AIChatStreamToolCallDelta": {
+        "description": "Incremental tool-call data emitted as the model assembles a tool invocation (SSE `tool_call_delta` event).",
+        "example": {
+          "delta": "string",
+          "id": "string",
+          "name": "Example Name"
+        },
+        "properties": {
+          "delta": {
+            "description": "A chunk of the tool call's serialized arguments. Concatenate deltas to reconstruct the arguments JSON.",
+            "example": "string",
+            "type": "string"
+          },
+          "id": {
+            "description": "Identifier of the tool call this delta belongs to, once the model has assigned one.",
+            "example": "string",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name of the tool being called, once known.",
+            "example": "Example Name",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AIChatStreamToolResult": {
+        "description": "The result of a server-executed tool, streamed back into the run (SSE `tool_result` event).",
+        "example": {
+          "content": "string",
+          "id": "string",
+          "name": "Example Name",
+          "resolution": "string"
+        },
+        "properties": {
+          "content": {
+            "description": "The tool's output, serialized as a string.",
+            "example": "string",
+            "type": "string"
+          },
+          "id": {
+            "description": "ID of the tool call this result satisfies.",
+            "example": "string",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name of the tool that produced this result.",
+            "example": "Example Name",
+            "type": "string"
+          },
+          "resolution": {
+            "description": "How the tool call resolved, e.g. `\"ok\"` or `\"error\"`.",
+            "example": "string",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "AICompletionResult": {
         "description": "The result of an AI chat completion request. Returned by chat completion endpoints after the model finishes generating.",
         "example": {
@@ -578,6 +752,7 @@
                     }
                   },
                   "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                  "template_upgrade_available": true,
                   "updated_at": "2024-01-01T00:00:00Z",
                   "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                 },
@@ -1302,6 +1477,11 @@
                     "example": "tem_0aBcDeFgHiJkLmNoPqRsTu",
                     "type": "string"
                   },
+                  "template_upgrade_available": {
+                    "description": "True when the agent's last-applied template version is behind the current version of its AgentTemplate config — i.e. reapplying the template (a per-agent upgrade) would bring it newer Solution content. Self-clears once the agent is reapplied. Computed only on list endpoints; `null` on single-agent GET.",
+                    "example": true,
+                    "type": "boolean"
+                  },
                   "updated_at": {
                     "description": "When the agent was last modified (ISO 8601).",
                     "example": "2024-01-01T00:00:00Z",
@@ -1747,6 +1927,7 @@
             }
           },
           "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+          "template_upgrade_available": true,
           "updated_at": "2024-01-01T00:00:00Z",
           "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
         },
@@ -1842,6 +2023,11 @@
             "example": "tem_0aBcDeFgHiJkLmNoPqRsTu",
             "type": "string"
           },
+          "template_upgrade_available": {
+            "description": "True when the agent's last-applied template version is behind the current version of its AgentTemplate config — i.e. reapplying the template (a per-agent upgrade) would bring it newer Solution content. Self-clears once the agent is reapplied. Computed only on list endpoints; `null` on single-agent GET.",
+            "example": true,
+            "type": "boolean"
+          },
           "updated_at": {
             "description": "When the agent was last modified (ISO 8601).",
             "example": "2024-01-01T00:00:00Z",
@@ -1876,6 +2062,7 @@
             "key": "value"
           },
           "name": "Example Name",
+          "provider": "sprites",
           "region": "us-east-1",
           "sprite_url": "https://example.com",
           "status": "ready",
@@ -1938,8 +2125,13 @@
             "example": "Example Name",
             "type": "string"
           },
+          "provider": {
+            "description": "Compute backend powering this computer: `\"sprites\"` (Fly Sprites) or `\"vercel\"` (Vercel Sandbox).",
+            "example": "sprites",
+            "type": "string"
+          },
           "region": {
-            "description": "Cloud region where the computer is hosted, e.g. `\"us-east-1\"`. `null` if not yet assigned.",
+            "description": "Cloud region where the computer is hosted, e.g. `\"us-east-1\"`. `null` if not yet assigned or when the provider has no region concept (e.g. `\"vercel\"`).",
             "example": "us-east-1",
             "type": "string"
           },
@@ -1984,6 +2176,7 @@
                 "key": "value"
               },
               "name": "Example Name",
+              "provider": "sprites",
               "region": "us-east-1",
               "sprite_url": "https://example.com",
               "status": "ready",
@@ -2425,6 +2618,7 @@
               }
             },
             "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+            "template_upgrade_available": true,
             "updated_at": "2024-01-01T00:00:00Z",
             "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
           },
@@ -2615,7 +2809,7 @@
             "type": "string"
           },
           "params": {
-            "description": "Kind-specific structured data used to construct the deep-link for this action. For `\"env_var\"` actions includes `key` and `scope`; for `\"install\"` actions includes `installation_kind`; for `\"integration\"` actions includes `mcp_server_ref`, and when resolvable also includes `provider` and `integration_id` for OAuth handoff. Empty object `{}` when no additional parameters are needed.",
+            "description": "Kind-specific structured data used to construct the deep-link for this action. For `\"env_var\"` actions includes `key` and `scope`; for `\"install\"` actions includes `installation_kind`; for `\"integration\"` actions includes `mcp_server_ref`, and when resolvable also includes `provider`, `integration_id` for OAuth handoff, and `connection_status` (`\"connected\"`, `\"disconnected\"`, or `\"token_expired\"`). Empty object `{}` when no additional parameters are needed.",
             "example": {
               "key": "value"
             },
@@ -2786,6 +2980,7 @@
                 }
               },
               "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+              "template_upgrade_available": true,
               "updated_at": "2024-01-01T00:00:00Z",
               "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
             }
@@ -4256,6 +4451,7 @@
               }
             },
             "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+            "template_upgrade_available": true,
             "updated_at": "2024-01-01T00:00:00Z",
             "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
           },
@@ -5284,6 +5480,7 @@
                 }
               },
               "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+              "template_upgrade_available": true,
               "updated_at": "2024-01-01T00:00:00Z",
               "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
             },
@@ -5404,6 +5601,7 @@
                     }
                   },
                   "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                  "template_upgrade_available": true,
                   "updated_at": "2024-01-01T00:00:00Z",
                   "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                 },
@@ -5447,6 +5645,7 @@
                   }
                 ],
                 "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                "agent_mode": "cli",
                 "attachments": [
                   {
                     "content_type": "application/json",
@@ -5629,6 +5828,7 @@
                   }
                 ],
                 "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                "agent_mode": "cli",
                 "attachments": [
                   {
                     "content_type": "application/json",
@@ -5853,6 +6053,7 @@
                     }
                   },
                   "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                  "template_upgrade_available": true,
                   "updated_at": "2024-01-01T00:00:00Z",
                   "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                 }
@@ -5969,6 +6170,7 @@
                 }
               ],
               "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+              "agent_mode": "cli",
               "attachments": [
                 {
                   "content_type": "application/json",
@@ -6193,6 +6395,7 @@
                   }
                 },
                 "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                "template_upgrade_available": true,
                 "updated_at": "2024-01-01T00:00:00Z",
                 "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
               }
@@ -6351,6 +6554,7 @@
                 }
               },
               "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+              "template_upgrade_available": true,
               "updated_at": "2024-01-01T00:00:00Z",
               "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
             },
@@ -6471,6 +6675,7 @@
                     }
                   },
                   "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                  "template_upgrade_available": true,
                   "updated_at": "2024-01-01T00:00:00Z",
                   "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                 },
@@ -6514,6 +6719,7 @@
                   }
                 ],
                 "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                "agent_mode": "cli",
                 "attachments": [
                   {
                     "content_type": "application/json",
@@ -6696,6 +6902,7 @@
                   }
                 ],
                 "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                "agent_mode": "cli",
                 "attachments": [
                   {
                     "content_type": "application/json",
@@ -6920,6 +7127,7 @@
                     }
                   },
                   "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                  "template_upgrade_available": true,
                   "updated_at": "2024-01-01T00:00:00Z",
                   "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                 }
@@ -7086,6 +7294,7 @@
               }
             },
             "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+            "template_upgrade_available": true,
             "updated_at": "2024-01-01T00:00:00Z",
             "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
           },
@@ -7156,6 +7365,7 @@
                 }
               ],
               "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+              "agent_mode": "cli",
               "attachments": [
                 {
                   "content_type": "application/json",
@@ -7278,6 +7488,7 @@
               }
             ],
             "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+            "agent_mode": "cli",
             "attachments": [
               {
                 "content_type": "application/json",
@@ -7492,6 +7703,7 @@
               }
             },
             "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+            "template_upgrade_available": true,
             "updated_at": "2024-01-01T00:00:00Z",
             "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
           },
@@ -7612,6 +7824,7 @@
                   }
                 },
                 "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                "template_upgrade_available": true,
                 "updated_at": "2024-01-01T00:00:00Z",
                 "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
               },
@@ -7655,6 +7868,7 @@
                 }
               ],
               "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+              "agent_mode": "cli",
               "attachments": [
                 {
                   "content_type": "application/json",
@@ -7837,6 +8051,7 @@
                 }
               ],
               "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+              "agent_mode": "cli",
               "attachments": [
                 {
                   "content_type": "application/json",
@@ -8061,6 +8276,7 @@
                   }
                 },
                 "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                "template_upgrade_available": true,
                 "updated_at": "2024-01-01T00:00:00Z",
                 "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
               }
@@ -9947,6 +10163,7 @@
             }
           ],
           "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+          "agent_mode": "cli",
           "attachments": [
             {
               "content_type": "application/json",
@@ -10044,6 +10261,7 @@
               }
             ],
             "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+            "agent_mode": "cli",
             "attachments": [
               {
                 "content_type": "application/json",
@@ -10145,6 +10363,15 @@
           "agent": {
             "description": "ID of the agent user that sent this message (`agi_...`). `null` for messages sent by human users.",
             "example": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+            "type": "string"
+          },
+          "agent_mode": {
+            "description": "Local agent execution mode for this message. One of `cli`, `embedded`, or `null` when the message was not created by a local agent execution path.",
+            "enum": [
+              "cli",
+              "embedded"
+            ],
+            "example": "cli",
             "type": "string"
           },
           "attachments": {
@@ -10259,6 +10486,7 @@
                 }
               ],
               "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+              "agent_mode": "cli",
               "attachments": [
                 {
                   "content_type": "application/json",
@@ -10644,6 +10872,7 @@
                 }
               ],
               "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+              "agent_mode": "cli",
               "attachments": [
                 {
                   "content_type": "application/json",
@@ -12832,6 +13061,7 @@
               }
             },
             "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+            "template_upgrade_available": true,
             "updated_at": "2024-01-01T00:00:00Z",
             "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
           },
@@ -13060,6 +13290,7 @@
                   }
                 },
                 "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                "template_upgrade_available": true,
                 "updated_at": "2024-01-01T00:00:00Z",
                 "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
               },
@@ -13206,6 +13437,7 @@
               }
             ],
             "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+            "agent_mode": "cli",
             "attachments": [
               {
                 "content_type": "application/json",
@@ -13430,6 +13662,7 @@
                 }
               },
               "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+              "template_upgrade_available": true,
               "updated_at": "2024-01-01T00:00:00Z",
               "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
             }
@@ -14508,6 +14741,7 @@
                                     }
                                   },
                                   "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                                  "template_upgrade_available": true,
                                   "updated_at": "2024-01-01T00:00:00Z",
                                   "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                                 },
@@ -15231,6 +15465,11 @@
                                     "description": "ID of the team that owns this agent (`tem_...`). `null` if the agent is not team-scoped.",
                                     "example": "tem_0aBcDeFgHiJkLmNoPqRsTu",
                                     "type": "string"
+                                  },
+                                  "template_upgrade_available": {
+                                    "description": "True when the agent's last-applied template version is behind the current version of its AgentTemplate config — i.e. reapplying the template (a per-agent upgrade) would bring it newer Solution content. Self-clears once the agent is reapplied. Computed only on list endpoints; `null` on single-agent GET.",
+                                    "example": true,
+                                    "type": "boolean"
                                   },
                                   "updated_at": {
                                     "description": "When the agent was last modified (ISO 8601).",
@@ -20133,11 +20372,12 @@
                     "key": "value"
                   },
                   "name": "Example Name",
+                  "provider": "string",
                   "region": "string"
                 },
                 "properties": {
                   "config": {
-                    "description": "Provider-specific configuration for the computer. Supported keys vary by region and plan.",
+                    "description": "Provider-specific configuration for the computer. Supported keys vary by provider. A top-level `provider` takes precedence over `config.provider`.",
                     "example": {},
                     "type": "object"
                   },
@@ -20156,6 +20396,11 @@
                   "name": {
                     "description": "Human-readable display name for the computer.",
                     "example": "Example Name",
+                    "type": "string"
+                  },
+                  "provider": {
+                    "description": "Compute backend for the computer: `\"sprites\"` (Fly Sprites, the default) or `\"vercel\"` (Vercel Sandbox). Folded into `config.provider`.",
+                    "example": "string",
                     "type": "string"
                   },
                   "region": {
@@ -22404,7 +22649,7 @@
             "description": "App-scoped token required. Use a token scoped to the target app.; Forbidden"
           },
           "404": {
-            "description": "Agent not found; Template not found"
+            "description": "Agent not found; Template not found; This agent's template is no longer part of its Solution. The Solution may have been changed or re-synced since this agent was installed."
           },
           "409": {
             "description": "Agent template changed since review; prepare the diff again."
@@ -22831,6 +23076,456 @@
         ]
       }
     },
+    "/api/v1/ai/chat/completions/stream": {
+      "post": {
+        "description": "Streams a chat completion over Server-Sent Events. Emits `message_delta`,\n`message_complete`, `tool_call_*`, `tool_result`, and a terminal `done` (or\n`error`) event. Same request shape as the non-streaming completion endpoint;\nthe app must have the `llm_calls` entitlement.\n",
+        "operationId": "post_api_v1_ai_chat_completions_stream",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "context": {},
+                  "messages": [
+                    {
+                      "content": "How can I help you today?",
+                      "content_parts": [
+                        {}
+                      ],
+                      "resume_token": "string",
+                      "role": "user",
+                      "tool_calls": [
+                        {
+                          "arguments": {},
+                          "id": "string",
+                          "name": "Example Name",
+                          "thought_signature": "string"
+                        }
+                      ],
+                      "tool_results": [
+                        {
+                          "content": "string",
+                          "id": "string",
+                          "name": "Example Name"
+                        }
+                      ]
+                    }
+                  ],
+                  "opts": {
+                    "max_tokens": 1,
+                    "model": "string",
+                    "server_tools": [
+                      {}
+                    ],
+                    "temperature": 1.0,
+                    "tool_choice": "string",
+                    "tools": [
+                      {
+                        "function": {
+                          "description": "An example description.",
+                          "name": "Example Name",
+                          "parameters": {}
+                        },
+                        "type": "function"
+                      }
+                    ]
+                  }
+                },
+                "properties": {
+                  "context": {
+                    "description": "Key-value map used to resolve template variables in message content. Omit if messages contain no templates.",
+                    "example": {},
+                    "type": "object"
+                  },
+                  "messages": {
+                    "description": "Ordered list of conversation messages to send to the model.",
+                    "example": [
+                      {
+                        "content": "How can I help you today?",
+                        "content_parts": [
+                          {}
+                        ],
+                        "resume_token": "string",
+                        "role": "user",
+                        "tool_calls": [
+                          {
+                            "arguments": {},
+                            "id": "string",
+                            "name": "Example Name",
+                            "thought_signature": "string"
+                          }
+                        ],
+                        "tool_results": [
+                          {
+                            "content": "string",
+                            "id": "string",
+                            "name": "Example Name"
+                          }
+                        ]
+                      }
+                    ],
+                    "items": {
+                      "description": "A single message in an AI conversation, following the OpenAI-compatible chat format. Used in both request inputs and completion responses.",
+                      "example": {
+                        "content": "How can I help you today?",
+                        "content_parts": [
+                          {}
+                        ],
+                        "resume_token": "string",
+                        "role": "user",
+                        "tool_calls": [
+                          {
+                            "arguments": {},
+                            "id": "string",
+                            "name": "Example Name",
+                            "thought_signature": "string"
+                          }
+                        ],
+                        "tool_results": [
+                          {
+                            "content": "string",
+                            "id": "string",
+                            "name": "Example Name"
+                          }
+                        ]
+                      },
+                      "properties": {
+                        "content": {
+                          "description": "Plain-text content of the message. Present for `system`, `user`, and `assistant` messages. `null` when the message body is expressed through `content_parts` or `tool_calls`.",
+                          "example": "How can I help you today?",
+                          "type": "string"
+                        },
+                        "content_parts": {
+                          "description": "Multimodal content parts for the message, used when the body includes images or mixed media. Each part is a map with a `type` key (`\"text\"`, `\"image_url\"`, or `\"image_data\"`). `null` when `content` is set.",
+                          "example": [
+                            {}
+                          ],
+                          "items": {
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "resume_token": {
+                          "description": "Opaque token that can be passed on a subsequent request to resume this conversation from the current state. `null` when the provider does not support conversation resumption.",
+                          "example": "string",
+                          "type": "string"
+                        },
+                        "role": {
+                          "description": "The speaker role for this message. One of `\"system\"`, `\"user\"`, `\"assistant\"`, or `\"tool\"`.",
+                          "example": "user",
+                          "type": "string"
+                        },
+                        "structured_output": {
+                          "description": "Parsed structured data returned by the model when a JSON schema or structured-output mode was requested. Shape varies by the schema supplied at call time. `null` when structured output was not requested."
+                        },
+                        "tool_calls": {
+                          "description": "Tool calls requested by the model in an `assistant` message. Present only on assistant messages that invoke one or more tools. `null` on all other message roles.",
+                          "example": [
+                            {
+                              "arguments": {},
+                              "id": "string",
+                              "name": "Example Name",
+                              "thought_signature": "string"
+                            }
+                          ],
+                          "items": {
+                            "description": "A tool (function) call emitted by the assistant within an AI message. Mirrors the OpenAI tool-call object format.",
+                            "example": {
+                              "arguments": {},
+                              "id": "string",
+                              "name": "Example Name",
+                              "thought_signature": "string"
+                            },
+                            "properties": {
+                              "arguments": {
+                                "description": "Arguments the model wants to pass to the tool, as a key-value map. Deserialize and validate these against the tool's input schema before executing.",
+                                "example": {},
+                                "type": "object"
+                              },
+                              "id": {
+                                "description": "Unique identifier for this tool call, assigned by the model. Use this value as `id` when submitting the corresponding tool result.",
+                                "example": "string",
+                                "type": "string"
+                              },
+                              "name": {
+                                "description": "Name of the tool or function the model wants to invoke, e.g. `\"web_search\"` or `\"run_code\"`.",
+                                "example": "Example Name",
+                                "type": "string"
+                              },
+                              "thought_signature": {
+                                "description": "Opaque signature representing the model's internal reasoning that led to this tool call. `null` when the provider does not expose chain-of-thought data.",
+                                "example": "string",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "arguments"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "tool_results": {
+                          "description": "Tool execution results provided in a `tool` message. Each entry corresponds to a prior tool call by its `id`. `null` on all other message roles.",
+                          "example": [
+                            {
+                              "content": "string",
+                              "id": "string",
+                              "name": "Example Name"
+                            }
+                          ],
+                          "items": {
+                            "description": "The result of executing a tool call, submitted back to the model as a tool-role message. Mirrors the OpenAI tool-result object format.",
+                            "example": {
+                              "content": "string",
+                              "id": "string",
+                              "name": "Example Name"
+                            },
+                            "properties": {
+                              "content": {
+                                "description": "Plain-text output produced by the tool execution. `null` when the result is expressed entirely through `resolution`.",
+                                "example": "string",
+                                "type": "string"
+                              },
+                              "id": {
+                                "description": "ID of the tool call this result satisfies. Must match the `id` from the corresponding `AIToolCall`.",
+                                "example": "string",
+                                "type": "string"
+                              },
+                              "name": {
+                                "description": "Name of the tool or function that was executed, e.g. `\"web_search\"`. Must match the `name` from the corresponding `AIToolCall`.",
+                                "example": "Example Name",
+                                "type": "string"
+                              },
+                              "resolution": {
+                                "description": "Structured result data from the tool execution. Shape varies by tool. `null` when the result is expressed as plain text in `content`."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "role"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "opts": {
+                    "description": "Model and sampling configuration for this request.",
+                    "example": {
+                      "max_tokens": 1,
+                      "model": "string",
+                      "server_tools": [
+                        {}
+                      ],
+                      "temperature": 1.0,
+                      "tool_choice": "string",
+                      "tools": [
+                        {
+                          "function": {
+                            "description": "An example description.",
+                            "name": "Example Name",
+                            "parameters": {}
+                          },
+                          "type": "function"
+                        }
+                      ]
+                    },
+                    "properties": {
+                      "max_tokens": {
+                        "description": "Maximum number of tokens the model may generate. Omit for the model default.",
+                        "example": 1,
+                        "type": "integer"
+                      },
+                      "model": {
+                        "description": "Model identifier, e.g. `\"gpt-4o\"` or `\"claude-3-7-sonnet-latest\"`.",
+                        "example": "string",
+                        "type": "string"
+                      },
+                      "server_tools": {
+                        "description": "Server-managed tool declarations executed before the response. Each entry must include a `type` key; currently only `\"search\"` is supported.",
+                        "example": [
+                          {}
+                        ],
+                        "items": {
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "temperature": {
+                        "description": "Sampling temperature between `0.0` and `2.0`. Higher values produce more random output. Omit for the model default.",
+                        "example": 1.0,
+                        "type": "number"
+                      },
+                      "tool_choice": {
+                        "description": "Controls tool selection. One of `\"auto\"`, `\"required\"`, or `\"none\"`. Omit to let the model decide.",
+                        "example": "string",
+                        "type": "string"
+                      },
+                      "tools": {
+                        "description": "OpenAI-compatible tool definitions available to the model. Omit when not using function calling.",
+                        "example": [
+                          {
+                            "function": {
+                              "description": "An example description.",
+                              "name": "Example Name",
+                              "parameters": {}
+                            },
+                            "type": "function"
+                          }
+                        ],
+                        "items": {
+                          "description": "An AI tool definition passed to a model, following the OpenAI tool-calling schema.",
+                          "example": {
+                            "function": {
+                              "description": "An example description.",
+                              "name": "Example Name",
+                              "parameters": {}
+                            },
+                            "type": "function"
+                          },
+                          "properties": {
+                            "function": {
+                              "description": "Callable function this tool exposes, including its name, description, and parameter schema.",
+                              "example": {
+                                "description": "An example description.",
+                                "name": "Example Name",
+                                "parameters": {}
+                              },
+                              "properties": {
+                                "description": {
+                                  "description": "Human-readable description of what the function does. The model uses this to decide when to call the function. `null` if not provided.",
+                                  "example": "An example description.",
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "description": "Unique name of the function that the model can invoke, e.g. `\"get_weather\"`.",
+                                  "example": "Example Name",
+                                  "type": "string"
+                                },
+                                "parameters": {
+                                  "description": "JSON Schema object describing the function's accepted parameters. Must be a valid JSON Schema of type `\"object\"`.",
+                                  "example": {},
+                                  "type": "object"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "parameters"
+                              ],
+                              "type": "object"
+                            },
+                            "type": {
+                              "description": "The tool type. Currently always `\"function\"`.",
+                              "example": "function",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "function"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "model"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "messages",
+                  "opts"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AIChatStreamMessageDelta"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AIChatStreamMessageComplete"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AIChatStreamToolCallDelta"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AIChatStreamToolResult"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AIChatStreamDone"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AIChatStreamError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Server-Sent Events stream"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "Payment required — plan does not allow this feature"
+          }
+        },
+        "summary": "Stream a chat completion",
+        "x-auth": [
+          "publishable_key",
+          "bearer"
+        ],
+        "x-sdk-streaming": {
+          "events": {
+            "done": {
+              "$ref": "#/components/schemas/AIChatStreamDone"
+            },
+            "error": {
+              "$ref": "#/components/schemas/AIChatStreamError"
+            },
+            "message_complete": {
+              "$ref": "#/components/schemas/AIChatStreamMessageComplete"
+            },
+            "message_delta": {
+              "$ref": "#/components/schemas/AIChatStreamMessageDelta"
+            },
+            "tool_call_delta": {
+              "$ref": "#/components/schemas/AIChatStreamToolCallDelta"
+            },
+            "tool_result": {
+              "$ref": "#/components/schemas/AIChatStreamToolResult"
+            }
+          },
+          "type": "sse"
+        }
+      }
+    },
     "/api/v1/ai/chat/models": {
       "get": {
         "description": "Returns the set of AI models that can be used with the chat completion and\nworkflow endpoints. The list reflects models currently enabled for the\nplatform and includes each model's identifier and whether it is the default.\n\nUse the `model` field from any entry in `data` as the value for\n`opts.model` when calling the completions or workflows endpoint.\n",
@@ -22845,9 +23540,18 @@
                   "example": {
                     "data": [
                       {
+                        "capabilities": [
+                          "image"
+                        ],
                         "default": true,
                         "id": "claude-sonnet-4-6",
-                        "name": "Example Name"
+                        "input_media_formats": [
+                          "string"
+                        ],
+                        "name": "Example Name",
+                        "output_media_formats": [
+                          "string"
+                        ]
                       }
                     ]
                   },
@@ -22856,19 +23560,52 @@
                       "description": "Array of available model objects. At least one entry is always present.",
                       "example": [
                         {
+                          "capabilities": [
+                            "image"
+                          ],
                           "default": true,
                           "id": "claude-sonnet-4-6",
-                          "name": "Example Name"
+                          "input_media_formats": [
+                            "string"
+                          ],
+                          "name": "Example Name",
+                          "output_media_formats": [
+                            "string"
+                          ]
                         }
                       ],
                       "items": {
                         "description": "An AI model available on the platform. Returned in model-listing responses so clients can populate model pickers and resolve the platform default.",
                         "example": {
+                          "capabilities": [
+                            "image"
+                          ],
                           "default": true,
                           "id": "claude-sonnet-4-6",
-                          "name": "Example Name"
+                          "input_media_formats": [
+                            "string"
+                          ],
+                          "name": "Example Name",
+                          "output_media_formats": [
+                            "string"
+                          ]
                         },
                         "properties": {
+                          "capabilities": {
+                            "description": "Machine-readable model capabilities. `\"image\"` marks image-input chat, `\"search\"` marks built-in web search, and `\"thinking\"` marks models with configurable reasoning. Empty when the catalog entry declares no special capabilities.",
+                            "example": [
+                              "image"
+                            ],
+                            "items": {
+                              "enum": [
+                                "image",
+                                "search",
+                                "thinking"
+                              ],
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
                           "default": {
                             "description": "`true` for the model the platform selects when an agent has no `default_model` configured, or for the system-wide fallback in image-generation contexts. Exactly one entry in any given model list carries this flag.",
                             "example": true,
@@ -22879,16 +23616,39 @@
                             "example": "claude-sonnet-4-6",
                             "type": "string"
                           },
+                          "input_media_formats": {
+                            "description": "MIME types accepted in chat `content_parts` image/file inputs for this model. For image-capable chat models this includes values such as `\"image/png\"`. Empty for text-only models.",
+                            "example": [
+                              "string"
+                            ],
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
                           "name": {
                             "description": "Human-readable display label for this model, e.g. `\"Claude Sonnet 4.6\"` or `\"Gemini 3.5 Flash (thinking)\"`. Render this value directly in pickers rather than attempting to parse or transform `id`. Falls back to the `id` string when the catalog entry does not declare an explicit name.",
                             "example": "Example Name",
                             "type": "string"
+                          },
+                          "output_media_formats": {
+                            "description": "MIME types this model can emit as media in chat responses. Empty for text-output models, including image-understanding models that only return text.",
+                            "example": [
+                              "string"
+                            ],
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
                           }
                         },
                         "required": [
                           "id",
                           "name",
-                          "default"
+                          "default",
+                          "capabilities",
+                          "input_media_formats",
+                          "output_media_formats"
                         ],
                         "type": "object"
                       },
@@ -23208,9 +23968,18 @@
                   "example": {
                     "data": [
                       {
+                        "capabilities": [
+                          "image"
+                        ],
                         "default": true,
                         "id": "claude-sonnet-4-6",
-                        "name": "Example Name"
+                        "input_media_formats": [
+                          "string"
+                        ],
+                        "name": "Example Name",
+                        "output_media_formats": [
+                          "string"
+                        ]
                       }
                     ]
                   },
@@ -23219,19 +23988,52 @@
                       "description": "Array of available image generation models, including their identifiers, human-readable names, and which one is the platform default.",
                       "example": [
                         {
+                          "capabilities": [
+                            "image"
+                          ],
                           "default": true,
                           "id": "claude-sonnet-4-6",
-                          "name": "Example Name"
+                          "input_media_formats": [
+                            "string"
+                          ],
+                          "name": "Example Name",
+                          "output_media_formats": [
+                            "string"
+                          ]
                         }
                       ],
                       "items": {
                         "description": "An AI model available on the platform. Returned in model-listing responses so clients can populate model pickers and resolve the platform default.",
                         "example": {
+                          "capabilities": [
+                            "image"
+                          ],
                           "default": true,
                           "id": "claude-sonnet-4-6",
-                          "name": "Example Name"
+                          "input_media_formats": [
+                            "string"
+                          ],
+                          "name": "Example Name",
+                          "output_media_formats": [
+                            "string"
+                          ]
                         },
                         "properties": {
+                          "capabilities": {
+                            "description": "Machine-readable model capabilities. `\"image\"` marks image-input chat, `\"search\"` marks built-in web search, and `\"thinking\"` marks models with configurable reasoning. Empty when the catalog entry declares no special capabilities.",
+                            "example": [
+                              "image"
+                            ],
+                            "items": {
+                              "enum": [
+                                "image",
+                                "search",
+                                "thinking"
+                              ],
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
                           "default": {
                             "description": "`true` for the model the platform selects when an agent has no `default_model` configured, or for the system-wide fallback in image-generation contexts. Exactly one entry in any given model list carries this flag.",
                             "example": true,
@@ -23242,16 +24044,39 @@
                             "example": "claude-sonnet-4-6",
                             "type": "string"
                           },
+                          "input_media_formats": {
+                            "description": "MIME types accepted in chat `content_parts` image/file inputs for this model. For image-capable chat models this includes values such as `\"image/png\"`. Empty for text-only models.",
+                            "example": [
+                              "string"
+                            ],
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
                           "name": {
                             "description": "Human-readable display label for this model, e.g. `\"Claude Sonnet 4.6\"` or `\"Gemini 3.5 Flash (thinking)\"`. Render this value directly in pickers rather than attempting to parse or transform `id`. Falls back to the `id` string when the catalog entry does not declare an explicit name.",
                             "example": "Example Name",
                             "type": "string"
+                          },
+                          "output_media_formats": {
+                            "description": "MIME types this model can emit as media in chat responses. Empty for text-output models, including image-understanding models that only return text.",
+                            "example": [
+                              "string"
+                            ],
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
                           }
                         },
                         "required": [
                           "id",
                           "name",
-                          "default"
+                          "default",
+                          "capabilities",
+                          "input_media_formats",
+                          "output_media_formats"
                         ],
                         "type": "object"
                       },
@@ -24783,6 +25608,7 @@
                   "agent": "string",
                   "change_description": "An example description.",
                   "data": {},
+                  "data_encoding": "string",
                   "kind": "string",
                   "lookup_key": "string",
                   "mime_type": "application/json",
@@ -24812,6 +25638,11 @@
                     "description": "Arbitrary key-value metadata stored on the version alongside the content.",
                     "example": {},
                     "type": "object"
+                  },
+                  "data_encoding": {
+                    "description": "Encoding of `raw_content`. Omit or set `\"raw\"` for literal content; set `\"base64\"` when sending binary content such as images or PDFs in JSON.",
+                    "example": "string",
+                    "type": "string"
                   },
                   "kind": {
                     "description": "Config kind that determines the schema and behavior of the config, e.g. `\"Agent\"` or `\"APITool\"`.",
@@ -25787,6 +26618,8 @@
               "schema": {
                 "example": {
                   "agent": "string",
+                  "data": {},
+                  "data_encoding": "string",
                   "kind": "string",
                   "mime_type": "application/json",
                   "raw_content": "string",
@@ -25796,6 +26629,16 @@
                 "properties": {
                   "agent": {
                     "description": "Agent ID (`agt_...`) that would own the config. Used for owner-aware validation rules. Mutually exclusive with `team` and `user`.",
+                    "example": "string",
+                    "type": "string"
+                  },
+                  "data": {
+                    "description": "Optional metadata used by kind-specific validation. File and Image configs require `data.name` when validating direct binary content.",
+                    "example": {},
+                    "type": "object"
+                  },
+                  "data_encoding": {
+                    "description": "Encoding of `raw_content`. Omit or set `\"raw\"` for literal content; set `\"base64\"` when sending binary content such as images or PDFs in JSON.",
                     "example": "string",
                     "type": "string"
                   },
@@ -26027,6 +26870,7 @@
                   "agent": "string",
                   "change_description": "An example description.",
                   "data": {},
+                  "data_encoding": "string",
                   "expected_version": 1,
                   "lookup_key": "string",
                   "mime_type": "application/json",
@@ -26054,6 +26898,11 @@
                     "description": "Arbitrary key-value metadata to store on the new version alongside the content.",
                     "example": {},
                     "type": "object"
+                  },
+                  "data_encoding": {
+                    "description": "Encoding of `raw_content`. Omit or set `\"raw\"` for literal content; set `\"base64\"` when sending binary content such as images or PDFs in JSON.",
+                    "example": "string",
+                    "type": "string"
                   },
                   "expected_version": {
                     "description": "Version number the caller expects to be current. If the config's actual current version does not match, the request returns 409 to signal a concurrent modification. Omit to skip optimistic locking.",
@@ -30366,7 +31215,7 @@
     },
     "/api/v1/solutions": {
       "get": {
-        "description": "Returns a paginated list of Solutions visible to the authenticated caller,\nmerging two scopes: app-level Solutions (system-owned rows with no org\naffiliation, visible to all authenticated viewers in the app) and org-level\nSolutions (system-owned rows stamped with the viewer's org ID, included when\nthe viewer carries an org context).\n\nSolutions that appear under both scopes are deduplicated by their stable\n`solution_id` value. The merged entry's `owners` array lists every scope the\nSolution was found under (`\"system\"` and/or `\"org\"`). When the app-level copy\nhas a higher `solution_version` than the org-level copy, the response includes\n`upgrade_available: true` and `latest_version` so callers can prompt for an\nupgrade.\n",
+        "description": "Returns a paginated list of Solutions visible to the caller, merging two\nscopes: app-level Solutions (system-owned rows with no org affiliation,\nvisible to everyone — including unauthenticated callers — so they can power\nthe public catalog) and org-level Solutions (system-owned rows stamped with\nthe viewer's org ID, included when an authenticated viewer carries an org\ncontext). Unauthenticated callers resolve to an app-scoped anonymous viewer\nand therefore only ever see the app-level scope.\n\nSolutions that appear under both scopes are deduplicated by their stable\n`solution_id` value. The merged entry's `owners` array lists every scope the\nSolution was found under (`\"system\"` and/or `\"org\"`). When the app-level copy\nhas a higher `solution_version` than the org-level copy, the response includes\n`upgrade_available: true` and `latest_version` so callers can prompt for an\nupgrade.\n",
         "operationId": "get_api_v1_solutions",
         "parameters": [
           {
@@ -31123,7 +31972,7 @@
         ]
       },
       "get": {
-        "description": "Returns a single Solution identified by its config ID (`cfg_...`) or\n`lookup_key`, in the same summary shape the list endpoint emits. The response\nalways includes a freshly-minted `readme_url` — call this endpoint to refresh\nan expired README token without making any other state change.\n\nVisibility matches the list endpoint: app-level Solutions (no org affiliation)\nare visible to every authenticated viewer in the app; org-scoped Solutions are\nonly visible to viewers whose org context matches. Anything else returns 404.\n\nWhen the resolved Solution is org-scoped, the endpoint compares its\n`solution_version` against the matching app-level copy. If the app-level copy\nis at a higher version the response includes `upgrade_available: true` and\n`latest_version`. App-level resolutions always report `upgrade_available: false`.\n",
+        "description": "Returns a single Solution identified by its config ID (`cfg_...`) or\n`lookup_key`, in the same summary shape the list endpoint emits. The response\nalways includes a freshly-minted `readme_url` — call this endpoint to refresh\nan expired README token without making any other state change.\n\nVisibility matches the list endpoint: app-level Solutions (no org affiliation)\nare visible to everyone — including unauthenticated callers, so the public\ncatalog can render a Solution's detail page logged-out; org-scoped Solutions\nare only visible to authenticated viewers whose org context matches. Anything\nelse returns 404.\n\nWhen the resolved Solution is org-scoped, the endpoint compares its\n`solution_version` against the matching app-level copy. If the app-level copy\nis at a higher version the response includes `upgrade_available: true` and\n`latest_version`. App-level resolutions always report `upgrade_available: false`.\n",
         "operationId": "get_api_v1_solutions__solution",
         "parameters": [
           {
@@ -34484,6 +35333,7 @@
                             }
                           },
                           "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                          "template_upgrade_available": true,
                           "updated_at": "2024-01-01T00:00:00Z",
                           "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                         },
@@ -34645,6 +35495,7 @@
                               }
                             },
                             "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                            "template_upgrade_available": true,
                             "updated_at": "2024-01-01T00:00:00Z",
                             "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                           },
@@ -34803,6 +35654,7 @@
                               }
                             },
                             "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                            "template_upgrade_available": true,
                             "updated_at": "2024-01-01T00:00:00Z",
                             "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                           },
@@ -34960,6 +35812,7 @@
                                 }
                               },
                               "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                              "template_upgrade_available": true,
                               "updated_at": "2024-01-01T00:00:00Z",
                               "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                             },
@@ -35684,6 +36537,11 @@
                                 "example": "tem_0aBcDeFgHiJkLmNoPqRsTu",
                                 "type": "string"
                               },
+                              "template_upgrade_available": {
+                                "description": "True when the agent's last-applied template version is behind the current version of its AgentTemplate config — i.e. reapplying the template (a per-agent upgrade) would bring it newer Solution content. Self-clears once the agent is reapplied. Computed only on list endpoints; `null` on single-agent GET.",
+                                "example": true,
+                                "type": "boolean"
+                              },
                               "updated_at": {
                                 "description": "When the agent was last modified (ISO 8601).",
                                 "example": "2024-01-01T00:00:00Z",
@@ -36160,6 +37018,7 @@
                             }
                           ],
                           "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                          "agent_mode": "cli",
                           "attachments": [
                             {
                               "content_type": "application/json",
@@ -36384,6 +37243,7 @@
                               }
                             },
                             "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                            "template_upgrade_available": true,
                             "updated_at": "2024-01-01T00:00:00Z",
                             "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                           }
@@ -36461,6 +37321,7 @@
                               }
                             ],
                             "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                            "agent_mode": "cli",
                             "attachments": [
                               {
                                 "content_type": "application/json",
@@ -36685,6 +37546,7 @@
                                 }
                               },
                               "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                              "template_upgrade_available": true,
                               "updated_at": "2024-01-01T00:00:00Z",
                               "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                             }
@@ -36759,6 +37621,7 @@
                               }
                             ],
                             "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                            "agent_mode": "cli",
                             "attachments": [
                               {
                                 "content_type": "application/json",
@@ -36983,6 +37846,7 @@
                                 }
                               },
                               "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                              "template_upgrade_available": true,
                               "updated_at": "2024-01-01T00:00:00Z",
                               "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                             }
@@ -37186,6 +38050,7 @@
                                 }
                               ],
                               "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                              "agent_mode": "cli",
                               "attachments": [
                                 {
                                   "content_type": "application/json",
@@ -37380,6 +38245,15 @@
                               "agent": {
                                 "description": "ID of the agent user that sent this message (`agi_...`). `null` for messages sent by human users.",
                                 "example": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                                "type": "string"
+                              },
+                              "agent_mode": {
+                                "description": "Local agent execution mode for this message. One of `cli`, `embedded`, or `null` when the message was not created by a local agent execution path.",
+                                "enum": [
+                                  "cli",
+                                  "embedded"
+                                ],
+                                "example": "cli",
                                 "type": "string"
                               },
                               "attachments": {
@@ -37931,6 +38805,7 @@
                                     }
                                   ],
                                   "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                                  "agent_mode": "cli",
                                   "attachments": [
                                     {
                                       "content_type": "application/json",
@@ -38296,6 +39171,7 @@
                                   }
                                 },
                                 "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                                "template_upgrade_available": true,
                                 "updated_at": "2024-01-01T00:00:00Z",
                                 "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                               }
@@ -38415,6 +39291,7 @@
                                   }
                                 },
                                 "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                                "template_upgrade_available": true,
                                 "updated_at": "2024-01-01T00:00:00Z",
                                 "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                               },
@@ -39138,6 +40015,11 @@
                                   "description": "ID of the team that owns this agent (`tem_...`). `null` if the agent is not team-scoped.",
                                   "example": "tem_0aBcDeFgHiJkLmNoPqRsTu",
                                   "type": "string"
+                                },
+                                "template_upgrade_available": {
+                                  "description": "True when the agent's last-applied template version is behind the current version of its AgentTemplate config — i.e. reapplying the template (a per-agent upgrade) would bring it newer Solution content. Self-clears once the agent is reapplied. Computed only on list endpoints; `null` on single-agent GET.",
+                                  "example": true,
+                                  "type": "boolean"
                                 },
                                 "updated_at": {
                                   "description": "When the agent was last modified (ISO 8601).",
@@ -40804,7 +41686,7 @@
     },
     "/api/v1/threads/{thread}/messages": {
       "get": {
-        "description": "Returns a cursor-paginated list of messages belonging to the specified thread,\nordered from oldest to newest. Supply `before_cursor` or `after_cursor` (not both)\nto page through the result set; omit both to receive the most recent page.\n\nThe authenticated user must have access to the thread's owner (workspace or user).\nA 403 is returned if the thread exists but is not accessible to the caller; a 404\nis returned if the thread does not exist or is not visible to the authenticated user.\n\nPass `include_reply_counts: true` to annotate each message with the number of\nthreaded replies it has received. This adds a small amount of latency and should\nbe omitted when reply counts are not needed.\n",
+        "description": "Returns a cursor-paginated list of messages belonging to the specified thread,\nordered from oldest to newest. Supply `before_cursor`, `after_cursor`, or both\nto page through or bound the result set; omit both to receive the most recent page.\nSupply `anchor` and `direction` to fetch a window before, after, or around a\nspecific message. Use `anchor=last_matching&anchor_agent_mode=embedded` to\nresolve the anchor from the latest embedded-agent message, and add\n`anchor_agent` to scope that resolution to a single sender agent.\n\nThe authenticated user must have access to the thread's owner (workspace or user).\nA 403 is returned if the thread exists but is not accessible to the caller; a 404\nis returned if the thread does not exist or is not visible to the authenticated user.\n\nPass `include_reply_counts: true` to annotate each message with the number of\nthreaded replies it has received. This adds a small amount of latency and should\nbe omitted when reply counts are not needed.\n",
         "operationId": "get_api_v1_threads__thread_messages",
         "parameters": [
           {
@@ -40818,7 +41700,7 @@
             }
           },
           {
-            "description": "Opaque cursor returned in a previous response's `before_cursor` field. When provided, returns the page of messages immediately before that position. Cannot be combined with `after_cursor`.",
+            "description": "Opaque cursor returned in a previous response's `before_cursor` field. When provided, returns messages immediately before that position. May be combined with `after_cursor` to bound a range.",
             "example": "string",
             "in": "query",
             "name": "before_cursor",
@@ -40828,7 +41710,7 @@
             }
           },
           {
-            "description": "Opaque cursor returned in a previous response's `after_cursor` field. When provided, returns the page of messages immediately after that position. Cannot be combined with `before_cursor`.",
+            "description": "Opaque cursor returned in a previous response's `after_cursor` field. When provided, returns messages immediately after that position. May be combined with `before_cursor` to bound a range.",
             "example": "string",
             "in": "query",
             "name": "after_cursor",
@@ -40845,6 +41727,85 @@
             "required": false,
             "schema": {
               "type": "integer"
+            }
+          },
+          {
+            "description": "Message ID (`msg_...`) to use as a window anchor, or `last_matching` to resolve the anchor from the latest message matching the anchor filters. Cannot be combined with `before_cursor` or `after_cursor`.",
+            "example": "string",
+            "in": "query",
+            "name": "anchor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Window direction relative to `anchor`. `before` returns older messages, `after` returns newer messages, and `around` returns messages on both sides. Defaults to `after` when `anchor` is supplied. `direction=around` cannot be combined with an explicit `limit`; use `before_limit` and `after_limit`.",
+            "example": "before",
+            "in": "query",
+            "name": "direction",
+            "required": false,
+            "schema": {
+              "enum": [
+                "before",
+                "after",
+                "around"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "For `direction=around`, maximum number of messages older than the anchor. Defaults to 20.",
+            "example": 1,
+            "in": "query",
+            "name": "before_limit",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "For `direction=around`, maximum number of messages newer than the anchor. Defaults to 20.",
+            "example": 1,
+            "in": "query",
+            "name": "after_limit",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Whether to include the anchor message in a window response. Defaults to `true` for `direction=around`; ignored for ordinary cursor pagination and one-sided windows.",
+            "example": true,
+            "in": "query",
+            "name": "include_anchor",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "When `anchor=last_matching`, resolve the anchor from the latest message with this local agent execution mode.",
+            "example": "cli",
+            "in": "query",
+            "name": "anchor_agent_mode",
+            "required": false,
+            "schema": {
+              "enum": [
+                "cli",
+                "embedded"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "When `anchor=last_matching`, scope the anchor resolution to messages sent by this agent (`agi_...`). Combine with `anchor_agent_mode` to resolve the latest message from a specific agent in a given mode.",
+            "example": "string",
+            "in": "query",
+            "name": "anchor_agent",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           },
           {
@@ -40867,6 +41828,7 @@
                   "example": {
                     "data": {
                       "after_cursor": "string",
+                      "anchor": "string",
                       "before_cursor": "string",
                       "messages": [
                         {
@@ -40887,6 +41849,7 @@
                             }
                           ],
                           "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                          "agent_mode": "cli",
                           "attachments": [
                             {
                               "content_type": "application/json",
@@ -40980,6 +41943,7 @@
                       "description": "Pagination envelope containing the messages for this page along with cursors for adjacent pages.",
                       "example": {
                         "after_cursor": "string",
+                        "anchor": "string",
                         "before_cursor": "string",
                         "messages": [
                           {
@@ -41000,6 +41964,7 @@
                               }
                             ],
                             "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                            "agent_mode": "cli",
                             "attachments": [
                               {
                                 "content_type": "application/json",
@@ -41093,6 +42058,11 @@
                           "example": "string",
                           "type": "string"
                         },
+                        "anchor": {
+                          "description": "Message ID used as the anchor for a windowed query. `null` for ordinary cursor pagination.",
+                          "example": "string",
+                          "type": "string"
+                        },
                         "before_cursor": {
                           "description": "Opaque cursor to pass as `before` to retrieve the page of messages older than this result set. `null` when there are no earlier messages.",
                           "example": "string",
@@ -41119,6 +42089,7 @@
                                 }
                               ],
                               "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                              "agent_mode": "cli",
                               "attachments": [
                                 {
                                   "content_type": "application/json",
@@ -41225,6 +42196,7 @@
                                 }
                               ],
                               "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                              "agent_mode": "cli",
                               "attachments": [
                                 {
                                   "content_type": "application/json",
@@ -41322,6 +42294,7 @@
                                   }
                                 ],
                                 "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                                "agent_mode": "cli",
                                 "attachments": [
                                   {
                                     "content_type": "application/json",
@@ -41521,6 +42494,15 @@
                               "agent": {
                                 "description": "ID of the agent user that sent this message (`agi_...`). `null` for messages sent by human users.",
                                 "example": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                                "type": "string"
+                              },
+                              "agent_mode": {
+                                "description": "Local agent execution mode for this message. One of `cli`, `embedded`, or `null` when the message was not created by a local agent execution path.",
+                                "enum": [
+                                  "cli",
+                                  "embedded"
+                                ],
+                                "example": "cli",
                                 "type": "string"
                               },
                               "attachments": {
@@ -42072,6 +43054,7 @@
                                     }
                                   ],
                                   "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                                  "agent_mode": "cli",
                                   "attachments": [
                                     {
                                       "content_type": "application/json",
@@ -43453,6 +44436,7 @@
                             }
                           ],
                           "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                          "agent_mode": "cli",
                           "attachments": [
                             {
                               "content_type": "application/json",
@@ -43677,6 +44661,7 @@
                               }
                             },
                             "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                            "template_upgrade_available": true,
                             "updated_at": "2024-01-01T00:00:00Z",
                             "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                           }
@@ -43754,6 +44739,7 @@
                               }
                             ],
                             "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                            "agent_mode": "cli",
                             "attachments": [
                               {
                                 "content_type": "application/json",
@@ -43978,6 +44964,7 @@
                                 }
                               },
                               "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                              "template_upgrade_available": true,
                               "updated_at": "2024-01-01T00:00:00Z",
                               "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                             }
@@ -44052,6 +45039,7 @@
                               }
                             ],
                             "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                            "agent_mode": "cli",
                             "attachments": [
                               {
                                 "content_type": "application/json",
@@ -44276,6 +45264,7 @@
                                 }
                               },
                               "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                              "template_upgrade_available": true,
                               "updated_at": "2024-01-01T00:00:00Z",
                               "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                             }
@@ -44479,6 +45468,7 @@
                                 }
                               ],
                               "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                              "agent_mode": "cli",
                               "attachments": [
                                 {
                                   "content_type": "application/json",
@@ -44673,6 +45663,15 @@
                               "agent": {
                                 "description": "ID of the agent user that sent this message (`agi_...`). `null` for messages sent by human users.",
                                 "example": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                                "type": "string"
+                              },
+                              "agent_mode": {
+                                "description": "Local agent execution mode for this message. One of `cli`, `embedded`, or `null` when the message was not created by a local agent execution path.",
+                                "enum": [
+                                  "cli",
+                                  "embedded"
+                                ],
+                                "example": "cli",
                                 "type": "string"
                               },
                               "attachments": {
@@ -45224,6 +46223,7 @@
                                     }
                                   ],
                                   "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                                  "agent_mode": "cli",
                                   "attachments": [
                                     {
                                       "content_type": "application/json",
@@ -45589,6 +46589,7 @@
                                   }
                                 },
                                 "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                                "template_upgrade_available": true,
                                 "updated_at": "2024-01-01T00:00:00Z",
                                 "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                               }
@@ -45708,6 +46709,7 @@
                                   }
                                 },
                                 "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                                "template_upgrade_available": true,
                                 "updated_at": "2024-01-01T00:00:00Z",
                                 "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                               },
@@ -46431,6 +47433,11 @@
                                   "description": "ID of the team that owns this agent (`tem_...`). `null` if the agent is not team-scoped.",
                                   "example": "tem_0aBcDeFgHiJkLmNoPqRsTu",
                                   "type": "string"
+                                },
+                                "template_upgrade_available": {
+                                  "description": "True when the agent's last-applied template version is behind the current version of its AgentTemplate config — i.e. reapplying the template (a per-agent upgrade) would bring it newer Solution content. Self-clears once the agent is reapplied. Computed only on list endpoints; `null` on single-agent GET.",
+                                  "example": true,
+                                  "type": "boolean"
                                 },
                                 "updated_at": {
                                   "description": "When the agent was last modified (ISO 8601).",
@@ -47375,6 +48382,7 @@
                               }
                             },
                             "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                            "template_upgrade_available": true,
                             "updated_at": "2024-01-01T00:00:00Z",
                             "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                           },
@@ -48099,6 +49107,11 @@
                               "example": "tem_0aBcDeFgHiJkLmNoPqRsTu",
                               "type": "string"
                             },
+                            "template_upgrade_available": {
+                              "description": "True when the agent's last-applied template version is behind the current version of its AgentTemplate config — i.e. reapplying the template (a per-agent upgrade) would bring it newer Solution content. Self-clears once the agent is reapplied. Computed only on list endpoints; `null` on single-agent GET.",
+                              "example": true,
+                              "type": "boolean"
+                            },
                             "updated_at": {
                               "description": "When the agent was last modified (ISO 8601).",
                               "example": "2024-01-01T00:00:00Z",
@@ -48786,6 +49799,7 @@
                     }
                   },
                   "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                  "template_upgrade_available": true,
                   "updated_at": "2024-01-01T00:00:00Z",
                   "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                 },
@@ -48906,6 +49920,7 @@
                         }
                       },
                       "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                      "template_upgrade_available": true,
                       "updated_at": "2024-01-01T00:00:00Z",
                       "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                     },
@@ -48949,6 +49964,7 @@
                       }
                     ],
                     "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                    "agent_mode": "cli",
                     "attachments": [
                       {
                         "content_type": "application/json",
@@ -49131,6 +50147,7 @@
                       }
                     ],
                     "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                    "agent_mode": "cli",
                     "attachments": [
                       {
                         "content_type": "application/json",
@@ -49355,6 +50372,7 @@
                         }
                       },
                       "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                      "template_upgrade_available": true,
                       "updated_at": "2024-01-01T00:00:00Z",
                       "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                     }
@@ -49471,6 +50489,7 @@
                     }
                   ],
                   "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                  "agent_mode": "cli",
                   "attachments": [
                     {
                       "content_type": "application/json",
@@ -49695,6 +50714,7 @@
                       }
                     },
                     "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                    "template_upgrade_available": true,
                     "updated_at": "2024-01-01T00:00:00Z",
                     "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                   }
@@ -49834,6 +50854,7 @@
                       }
                     },
                     "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                    "template_upgrade_available": true,
                     "updated_at": "2024-01-01T00:00:00Z",
                     "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                   },
@@ -49954,6 +50975,7 @@
                           }
                         },
                         "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                        "template_upgrade_available": true,
                         "updated_at": "2024-01-01T00:00:00Z",
                         "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                       },
@@ -49997,6 +51019,7 @@
                         }
                       ],
                       "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                      "agent_mode": "cli",
                       "attachments": [
                         {
                           "content_type": "application/json",
@@ -50179,6 +51202,7 @@
                         }
                       ],
                       "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                      "agent_mode": "cli",
                       "attachments": [
                         {
                           "content_type": "application/json",
@@ -50403,6 +51427,7 @@
                           }
                         },
                         "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                        "template_upgrade_available": true,
                         "updated_at": "2024-01-01T00:00:00Z",
                         "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                       }
@@ -50545,6 +51570,7 @@
                         }
                       },
                       "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                      "template_upgrade_available": true,
                       "updated_at": "2024-01-01T00:00:00Z",
                       "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                     },
@@ -51269,6 +52295,11 @@
                         "example": "tem_0aBcDeFgHiJkLmNoPqRsTu",
                         "type": "string"
                       },
+                      "template_upgrade_available": {
+                        "description": "True when the agent's last-applied template version is behind the current version of its AgentTemplate config — i.e. reapplying the template (a per-agent upgrade) would bring it newer Solution content. Self-clears once the agent is reapplied. Computed only on list endpoints; `null` on single-agent GET.",
+                        "example": true,
+                        "type": "boolean"
+                      },
                       "updated_at": {
                         "description": "When the agent was last modified (ISO 8601).",
                         "example": "2024-01-01T00:00:00Z",
@@ -51413,6 +52444,7 @@
                             }
                           },
                           "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                          "template_upgrade_available": true,
                           "updated_at": "2024-01-01T00:00:00Z",
                           "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                         },
@@ -51553,6 +52585,7 @@
                             }
                           },
                           "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                          "template_upgrade_available": true,
                           "updated_at": "2024-01-01T00:00:00Z",
                           "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                         },
@@ -51692,6 +52725,7 @@
                               }
                             },
                             "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                            "template_upgrade_available": true,
                             "updated_at": "2024-01-01T00:00:00Z",
                             "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                           },
@@ -52416,6 +53450,11 @@
                               "example": "tem_0aBcDeFgHiJkLmNoPqRsTu",
                               "type": "string"
                             },
+                            "template_upgrade_available": {
+                              "description": "True when the agent's last-applied template version is behind the current version of its AgentTemplate config — i.e. reapplying the template (a per-agent upgrade) would bring it newer Solution content. Self-clears once the agent is reapplied. Computed only on list endpoints; `null` on single-agent GET.",
+                              "example": true,
+                              "type": "boolean"
+                            },
                             "updated_at": {
                               "description": "When the agent was last modified (ISO 8601).",
                               "example": "2024-01-01T00:00:00Z",
@@ -52565,6 +53604,7 @@
                           }
                         ],
                         "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                        "agent_mode": "cli",
                         "attachments": [
                           {
                             "content_type": "application/json",
@@ -52671,6 +53711,7 @@
                           }
                         ],
                         "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                        "agent_mode": "cli",
                         "attachments": [
                           {
                             "content_type": "application/json",
@@ -52768,6 +53809,7 @@
                             }
                           ],
                           "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                          "agent_mode": "cli",
                           "attachments": [
                             {
                               "content_type": "application/json",
@@ -52967,6 +54009,15 @@
                         "agent": {
                           "description": "ID of the agent user that sent this message (`agi_...`). `null` for messages sent by human users.",
                           "example": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                          "type": "string"
+                        },
+                        "agent_mode": {
+                          "description": "Local agent execution mode for this message. One of `cli`, `embedded`, or `null` when the message was not created by a local agent execution path.",
+                          "enum": [
+                            "cli",
+                            "embedded"
+                          ],
+                          "example": "cli",
                           "type": "string"
                         },
                         "attachments": {
@@ -53518,6 +54569,7 @@
                               }
                             ],
                             "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                            "agent_mode": "cli",
                             "attachments": [
                               {
                                 "content_type": "application/json",
@@ -53981,6 +55033,7 @@
                           }
                         ],
                         "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                        "agent_mode": "cli",
                         "attachments": [
                           {
                             "content_type": "application/json",
@@ -54205,6 +55258,7 @@
                             }
                           },
                           "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                          "template_upgrade_available": true,
                           "updated_at": "2024-01-01T00:00:00Z",
                           "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                         }
@@ -54408,6 +55462,7 @@
                             }
                           ],
                           "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                          "agent_mode": "cli",
                           "attachments": [
                             {
                               "content_type": "application/json",
@@ -54602,6 +55657,15 @@
                           "agent": {
                             "description": "ID of the agent user that sent this message (`agi_...`). `null` for messages sent by human users.",
                             "example": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                            "type": "string"
+                          },
+                          "agent_mode": {
+                            "description": "Local agent execution mode for this message. One of `cli`, `embedded`, or `null` when the message was not created by a local agent execution path.",
+                            "enum": [
+                              "cli",
+                              "embedded"
+                            ],
+                            "example": "cli",
                             "type": "string"
                           },
                           "attachments": {
@@ -55153,6 +56217,7 @@
                                 }
                               ],
                               "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                              "agent_mode": "cli",
                               "attachments": [
                                 {
                                   "content_type": "application/json",
@@ -55518,6 +56583,7 @@
                               }
                             },
                             "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                            "template_upgrade_available": true,
                             "updated_at": "2024-01-01T00:00:00Z",
                             "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                           }
@@ -55637,6 +56703,7 @@
                               }
                             },
                             "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                            "template_upgrade_available": true,
                             "updated_at": "2024-01-01T00:00:00Z",
                             "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                           },
@@ -56361,6 +57428,11 @@
                               "example": "tem_0aBcDeFgHiJkLmNoPqRsTu",
                               "type": "string"
                             },
+                            "template_upgrade_available": {
+                              "description": "True when the agent's last-applied template version is behind the current version of its AgentTemplate config — i.e. reapplying the template (a per-agent upgrade) would bring it newer Solution content. Self-clears once the agent is reapplied. Computed only on list endpoints; `null` on single-agent GET.",
+                              "example": true,
+                              "type": "boolean"
+                            },
                             "updated_at": {
                               "description": "When the agent was last modified (ISO 8601).",
                               "example": "2024-01-01T00:00:00Z",
@@ -56808,6 +57880,7 @@
                       }
                     ],
                     "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                    "agent_mode": "cli",
                     "attachments": [
                       {
                         "content_type": "application/json",
@@ -57032,6 +58105,7 @@
                         }
                       },
                       "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                      "template_upgrade_available": true,
                       "updated_at": "2024-01-01T00:00:00Z",
                       "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                     }
@@ -57235,6 +58309,7 @@
                         }
                       ],
                       "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                      "agent_mode": "cli",
                       "attachments": [
                         {
                           "content_type": "application/json",
@@ -57429,6 +58504,15 @@
                       "agent": {
                         "description": "ID of the agent user that sent this message (`agi_...`). `null` for messages sent by human users.",
                         "example": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                        "type": "string"
+                      },
+                      "agent_mode": {
+                        "description": "Local agent execution mode for this message. One of `cli`, `embedded`, or `null` when the message was not created by a local agent execution path.",
+                        "enum": [
+                          "cli",
+                          "embedded"
+                        ],
+                        "example": "cli",
                         "type": "string"
                       },
                       "attachments": {
@@ -57980,6 +59064,7 @@
                             }
                           ],
                           "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                          "agent_mode": "cli",
                           "attachments": [
                             {
                               "content_type": "application/json",
@@ -58345,6 +59430,7 @@
                           }
                         },
                         "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                        "template_upgrade_available": true,
                         "updated_at": "2024-01-01T00:00:00Z",
                         "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                       }
@@ -58464,6 +59550,7 @@
                           }
                         },
                         "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                        "template_upgrade_available": true,
                         "updated_at": "2024-01-01T00:00:00Z",
                         "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                       },
@@ -59188,6 +60275,11 @@
                           "example": "tem_0aBcDeFgHiJkLmNoPqRsTu",
                           "type": "string"
                         },
+                        "template_upgrade_available": {
+                          "description": "True when the agent's last-applied template version is behind the current version of its AgentTemplate config — i.e. reapplying the template (a per-agent upgrade) would bring it newer Solution content. Self-clears once the agent is reapplied. Computed only on list endpoints; `null` on single-agent GET.",
+                          "example": true,
+                          "type": "boolean"
+                        },
                         "updated_at": {
                           "description": "When the agent was last modified (ISO 8601).",
                           "example": "2024-01-01T00:00:00Z",
@@ -59355,6 +60447,7 @@
                     }
                   ],
                   "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                  "agent_mode": "cli",
                   "attachments": [
                     {
                       "content_type": "application/json",
@@ -59464,6 +60557,7 @@
                       }
                     ],
                     "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                    "agent_mode": "cli",
                     "attachments": [
                       {
                         "content_type": "application/json",
@@ -59570,6 +60664,7 @@
                       }
                     ],
                     "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                    "agent_mode": "cli",
                     "attachments": [
                       {
                         "content_type": "application/json",
@@ -59667,6 +60762,7 @@
                         }
                       ],
                       "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                      "agent_mode": "cli",
                       "attachments": [
                         {
                           "content_type": "application/json",
@@ -59866,6 +60962,15 @@
                     "agent": {
                       "description": "ID of the agent user that sent this message (`agi_...`). `null` for messages sent by human users.",
                       "example": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                      "type": "string"
+                    },
+                    "agent_mode": {
+                      "description": "Local agent execution mode for this message. One of `cli`, `embedded`, or `null` when the message was not created by a local agent execution path.",
+                      "enum": [
+                        "cli",
+                        "embedded"
+                      ],
+                      "example": "cli",
                       "type": "string"
                     },
                     "attachments": {
@@ -60417,6 +61522,7 @@
                           }
                         ],
                         "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                        "agent_mode": "cli",
                         "attachments": [
                           {
                             "content_type": "application/json",
@@ -60687,6 +61793,7 @@
                     }
                   },
                   "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                  "template_upgrade_available": true,
                   "updated_at": "2024-01-01T00:00:00Z",
                   "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                 },
@@ -60807,6 +61914,7 @@
                         }
                       },
                       "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                      "template_upgrade_available": true,
                       "updated_at": "2024-01-01T00:00:00Z",
                       "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                     },
@@ -60850,6 +61958,7 @@
                       }
                     ],
                     "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                    "agent_mode": "cli",
                     "attachments": [
                       {
                         "content_type": "application/json",
@@ -61032,6 +62141,7 @@
                       }
                     ],
                     "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                    "agent_mode": "cli",
                     "attachments": [
                       {
                         "content_type": "application/json",
@@ -61256,6 +62366,7 @@
                         }
                       },
                       "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                      "template_upgrade_available": true,
                       "updated_at": "2024-01-01T00:00:00Z",
                       "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                     }
@@ -61396,6 +62507,7 @@
                       }
                     },
                     "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                    "template_upgrade_available": true,
                     "updated_at": "2024-01-01T00:00:00Z",
                     "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                   },
@@ -61516,6 +62628,7 @@
                           }
                         },
                         "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                        "template_upgrade_available": true,
                         "updated_at": "2024-01-01T00:00:00Z",
                         "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                       },
@@ -61559,6 +62672,7 @@
                         }
                       ],
                       "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                      "agent_mode": "cli",
                       "attachments": [
                         {
                           "content_type": "application/json",
@@ -61741,6 +62855,7 @@
                         }
                       ],
                       "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                      "agent_mode": "cli",
                       "attachments": [
                         {
                           "content_type": "application/json",
@@ -61965,6 +63080,7 @@
                           }
                         },
                         "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                        "template_upgrade_available": true,
                         "updated_at": "2024-01-01T00:00:00Z",
                         "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                       }
@@ -62107,6 +63223,7 @@
                         }
                       },
                       "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                      "template_upgrade_available": true,
                       "updated_at": "2024-01-01T00:00:00Z",
                       "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                     },
@@ -62831,6 +63948,11 @@
                         "example": "tem_0aBcDeFgHiJkLmNoPqRsTu",
                         "type": "string"
                       },
+                      "template_upgrade_available": {
+                        "description": "True when the agent's last-applied template version is behind the current version of its AgentTemplate config — i.e. reapplying the template (a per-agent upgrade) would bring it newer Solution content. Self-clears once the agent is reapplied. Computed only on list endpoints; `null` on single-agent GET.",
+                        "example": true,
+                        "type": "boolean"
+                      },
                       "updated_at": {
                         "description": "When the agent was last modified (ISO 8601).",
                         "example": "2024-01-01T00:00:00Z",
@@ -62975,6 +64097,7 @@
                             }
                           },
                           "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                          "template_upgrade_available": true,
                           "updated_at": "2024-01-01T00:00:00Z",
                           "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                         },
@@ -63115,6 +64238,7 @@
                             }
                           },
                           "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                          "template_upgrade_available": true,
                           "updated_at": "2024-01-01T00:00:00Z",
                           "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                         },
@@ -63254,6 +64378,7 @@
                               }
                             },
                             "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                            "template_upgrade_available": true,
                             "updated_at": "2024-01-01T00:00:00Z",
                             "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                           },
@@ -63978,6 +65103,11 @@
                               "example": "tem_0aBcDeFgHiJkLmNoPqRsTu",
                               "type": "string"
                             },
+                            "template_upgrade_available": {
+                              "description": "True when the agent's last-applied template version is behind the current version of its AgentTemplate config — i.e. reapplying the template (a per-agent upgrade) would bring it newer Solution content. Self-clears once the agent is reapplied. Computed only on list endpoints; `null` on single-agent GET.",
+                              "example": true,
+                              "type": "boolean"
+                            },
                             "updated_at": {
                               "description": "When the agent was last modified (ISO 8601).",
                               "example": "2024-01-01T00:00:00Z",
@@ -64127,6 +65257,7 @@
                           }
                         ],
                         "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                        "agent_mode": "cli",
                         "attachments": [
                           {
                             "content_type": "application/json",
@@ -64233,6 +65364,7 @@
                           }
                         ],
                         "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                        "agent_mode": "cli",
                         "attachments": [
                           {
                             "content_type": "application/json",
@@ -64330,6 +65462,7 @@
                             }
                           ],
                           "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                          "agent_mode": "cli",
                           "attachments": [
                             {
                               "content_type": "application/json",
@@ -64529,6 +65662,15 @@
                         "agent": {
                           "description": "ID of the agent user that sent this message (`agi_...`). `null` for messages sent by human users.",
                           "example": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                          "type": "string"
+                        },
+                        "agent_mode": {
+                          "description": "Local agent execution mode for this message. One of `cli`, `embedded`, or `null` when the message was not created by a local agent execution path.",
+                          "enum": [
+                            "cli",
+                            "embedded"
+                          ],
+                          "example": "cli",
                           "type": "string"
                         },
                         "attachments": {
@@ -65080,6 +66222,7 @@
                               }
                             ],
                             "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                            "agent_mode": "cli",
                             "attachments": [
                               {
                                 "content_type": "application/json",
@@ -65543,6 +66686,7 @@
                           }
                         ],
                         "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                        "agent_mode": "cli",
                         "attachments": [
                           {
                             "content_type": "application/json",
@@ -65767,6 +66911,7 @@
                             }
                           },
                           "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                          "template_upgrade_available": true,
                           "updated_at": "2024-01-01T00:00:00Z",
                           "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                         }
@@ -65970,6 +67115,7 @@
                             }
                           ],
                           "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                          "agent_mode": "cli",
                           "attachments": [
                             {
                               "content_type": "application/json",
@@ -66164,6 +67310,15 @@
                           "agent": {
                             "description": "ID of the agent user that sent this message (`agi_...`). `null` for messages sent by human users.",
                             "example": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                            "type": "string"
+                          },
+                          "agent_mode": {
+                            "description": "Local agent execution mode for this message. One of `cli`, `embedded`, or `null` when the message was not created by a local agent execution path.",
+                            "enum": [
+                              "cli",
+                              "embedded"
+                            ],
+                            "example": "cli",
                             "type": "string"
                           },
                           "attachments": {
@@ -66715,6 +67870,7 @@
                                 }
                               ],
                               "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                              "agent_mode": "cli",
                               "attachments": [
                                 {
                                   "content_type": "application/json",
@@ -67080,6 +68236,7 @@
                               }
                             },
                             "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                            "template_upgrade_available": true,
                             "updated_at": "2024-01-01T00:00:00Z",
                             "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                           }
@@ -67199,6 +68356,7 @@
                               }
                             },
                             "team": "tem_0aBcDeFgHiJkLmNoPqRsTu",
+                            "template_upgrade_available": true,
                             "updated_at": "2024-01-01T00:00:00Z",
                             "user": "usr_0aBcDeFgHiJkLmNoPqRsTu"
                           },
@@ -67923,6 +69081,11 @@
                               "example": "tem_0aBcDeFgHiJkLmNoPqRsTu",
                               "type": "string"
                             },
+                            "template_upgrade_available": {
+                              "description": "True when the agent's last-applied template version is behind the current version of its AgentTemplate config — i.e. reapplying the template (a per-agent upgrade) would bring it newer Solution content. Self-clears once the agent is reapplied. Computed only on list endpoints; `null` on single-agent GET.",
+                              "example": true,
+                              "type": "boolean"
+                            },
                             "updated_at": {
                               "description": "When the agent was last modified (ISO 8601).",
                               "example": "2024-01-01T00:00:00Z",
@@ -68095,6 +69258,7 @@
                   }
                 ],
                 "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                "agent_mode": "cli",
                 "attachments": [
                   {
                     "content_type": "application/json",
@@ -68202,6 +69366,7 @@
                     }
                   ],
                   "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                  "agent_mode": "cli",
                   "attachments": [
                     {
                       "content_type": "application/json",
@@ -68396,6 +69561,15 @@
                   "agent": {
                     "description": "ID of the agent user that sent this message (`agi_...`). `null` for messages sent by human users.",
                     "example": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                    "type": "string"
+                  },
+                  "agent_mode": {
+                    "description": "Local agent execution mode for this message. One of `cli`, `embedded`, or `null` when the message was not created by a local agent execution path.",
+                    "enum": [
+                      "cli",
+                      "embedded"
+                    ],
+                    "example": "cli",
                     "type": "string"
                   },
                   "attachments": {
@@ -68947,6 +70121,7 @@
                         }
                       ],
                       "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                      "agent_mode": "cli",
                       "attachments": [
                         {
                           "content_type": "application/json",
@@ -69113,6 +70288,7 @@
                   }
                 ],
                 "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                "agent_mode": "cli",
                 "attachments": [
                   {
                     "content_type": "application/json",
@@ -69220,6 +70396,7 @@
                     }
                   ],
                   "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                  "agent_mode": "cli",
                   "attachments": [
                     {
                       "content_type": "application/json",
@@ -69414,6 +70591,15 @@
                   "agent": {
                     "description": "ID of the agent user that sent this message (`agi_...`). `null` for messages sent by human users.",
                     "example": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                    "type": "string"
+                  },
+                  "agent_mode": {
+                    "description": "Local agent execution mode for this message. One of `cli`, `embedded`, or `null` when the message was not created by a local agent execution path.",
+                    "enum": [
+                      "cli",
+                      "embedded"
+                    ],
+                    "example": "cli",
                     "type": "string"
                   },
                   "attachments": {
@@ -69965,6 +71151,7 @@
                         }
                       ],
                       "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                      "agent_mode": "cli",
                       "attachments": [
                         {
                           "content_type": "application/json",
@@ -70198,6 +71385,30 @@
             "properties": {},
             "type": "object"
           }
+        },
+        {
+          "description": "Signal that the current user has started or stopped typing in the thread",
+          "event": "api:chat:typing",
+          "params": {
+            "example": {
+              "is_typing": true
+            },
+            "properties": {
+              "is_typing": {
+                "example": true,
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "is_typing"
+            ],
+            "type": "object"
+          },
+          "returns": {
+            "description": "Empty acknowledgement payload returned by channel message handlers that produce no data. The wire envelope is `{\"status\": \"ok\", \"response\": {}}`.",
+            "properties": {},
+            "type": "object"
+          }
         }
       ],
       "name": "ApiChatChannel",
@@ -70227,6 +71438,7 @@
                   }
                 ],
                 "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                "agent_mode": "cli",
                 "attachments": [
                   {
                     "content_type": "application/json",
@@ -70343,6 +71555,7 @@
                     }
                   ],
                   "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                  "agent_mode": "cli",
                   "attachments": [
                     {
                       "content_type": "application/json",
@@ -70537,6 +71750,15 @@
                   "agent": {
                     "description": "ID of the agent user that sent this message (`agi_...`). `null` for messages sent by human users.",
                     "example": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                    "type": "string"
+                  },
+                  "agent_mode": {
+                    "description": "Local agent execution mode for this message. One of `cli`, `embedded`, or `null` when the message was not created by a local agent execution path.",
+                    "enum": [
+                      "cli",
+                      "embedded"
+                    ],
+                    "example": "cli",
                     "type": "string"
                   },
                   "attachments": {
@@ -71088,6 +72310,7 @@
                         }
                       ],
                       "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                      "agent_mode": "cli",
                       "attachments": [
                         {
                           "content_type": "application/json",
@@ -71232,6 +72455,7 @@
                   }
                 ],
                 "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                "agent_mode": "cli",
                 "attachments": [
                   {
                     "content_type": "application/json",
@@ -71340,6 +72564,7 @@
                     }
                   ],
                   "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                  "agent_mode": "cli",
                   "attachments": [
                     {
                       "content_type": "application/json",
@@ -71534,6 +72759,15 @@
                   "agent": {
                     "description": "ID of the agent user that sent this message (`agi_...`). `null` for messages sent by human users.",
                     "example": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                    "type": "string"
+                  },
+                  "agent_mode": {
+                    "description": "Local agent execution mode for this message. One of `cli`, `embedded`, or `null` when the message was not created by a local agent execution path.",
+                    "enum": [
+                      "cli",
+                      "embedded"
+                    ],
+                    "example": "cli",
                     "type": "string"
                   },
                   "attachments": {
@@ -72085,6 +73319,7 @@
                         }
                       ],
                       "agent": "agi_0aBcDeFgHiJkLmNoPqRsTu",
+                      "agent_mode": "cli",
                       "attachments": [
                         {
                           "content_type": "application/json",
@@ -72243,6 +73478,126 @@
               "event": {
                 "example": {},
                 "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "description": "Broadcast when a participant (human or agent) starts or stops typing. Ephemeral; never persisted.",
+          "event": "typing",
+          "payload": {
+            "example": {
+              "actor": {
+                "alias": "alice",
+                "id": "user-usr_01j3k5m7n9p2r4s6t8v0w1x2",
+                "name": "Example Name",
+                "profile_picture": {
+                  "file": "fil_0aBcDeFgHiJkLmNoPqRsTu",
+                  "height": 600,
+                  "media": "med_0aBcDeFgHiJkLmNoPqRsTu",
+                  "mime_type": "application/json",
+                  "refresh_url": "https://example.com",
+                  "url": "https://example.com",
+                  "width": 800
+                }
+              },
+              "is_typing": true,
+              "thread_id": "string"
+            },
+            "properties": {
+              "actor": {
+                "description": "The entity that authored a message, either a human user or an agent.",
+                "example": {
+                  "alias": "alice",
+                  "id": "user-usr_01j3k5m7n9p2r4s6t8v0w1x2",
+                  "name": "Example Name",
+                  "profile_picture": {
+                    "file": "fil_0aBcDeFgHiJkLmNoPqRsTu",
+                    "height": 600,
+                    "media": "med_0aBcDeFgHiJkLmNoPqRsTu",
+                    "mime_type": "application/json",
+                    "refresh_url": "https://example.com",
+                    "url": "https://example.com",
+                    "width": 800
+                  }
+                },
+                "properties": {
+                  "alias": {
+                    "description": "Short handle or alias for the actor, used as an alternate display identifier. `null` if not configured.",
+                    "example": "alice",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Composite actor identifier. Format is `\"user-<usr_...>\"` for human users or `\"agent-<agi_...>\"` for agents.",
+                    "example": "user-usr_01j3k5m7n9p2r4s6t8v0w1x2",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Display name of the actor shown in the UI. `null` if no name is set.",
+                    "example": "Example Name",
+                    "type": "string"
+                  },
+                  "profile_picture": {
+                    "description": "Profile picture for the actor. `null` if the actor has no profile picture.",
+                    "example": {
+                      "file": "fil_0aBcDeFgHiJkLmNoPqRsTu",
+                      "height": 600,
+                      "media": "med_0aBcDeFgHiJkLmNoPqRsTu",
+                      "mime_type": "application/json",
+                      "refresh_url": "https://example.com",
+                      "url": "https://example.com",
+                      "width": 800
+                    },
+                    "properties": {
+                      "file": {
+                        "description": "ID of the underlying storage file (`fil_...`). `null` when the image is not backed by a platform storage file.",
+                        "example": "fil_0aBcDeFgHiJkLmNoPqRsTu",
+                        "type": "string"
+                      },
+                      "height": {
+                        "description": "Height of the image in pixels. `null` if not known.",
+                        "example": 600,
+                        "type": "integer"
+                      },
+                      "media": {
+                        "description": "ID of the associated media record (`med_...`). `null` when the image is not linked to a media entity.",
+                        "example": "med_0aBcDeFgHiJkLmNoPqRsTu",
+                        "type": "string"
+                      },
+                      "mime_type": {
+                        "description": "MIME type of the image, e.g. `\"image/png\"` or `\"image/jpeg\"`. `null` if not known.",
+                        "example": "application/json",
+                        "type": "string"
+                      },
+                      "refresh_url": {
+                        "description": "Endpoint URL you can call to obtain a fresh signed `url` when the current one has expired. `null` if the URL does not require refreshing.",
+                        "example": "https://example.com",
+                        "type": "string"
+                      },
+                      "url": {
+                        "description": "Signed or public URL for downloading the image. May be time-limited; use `refresh_url` to obtain a new URL when this one expires.",
+                        "example": "https://example.com",
+                        "type": "string"
+                      },
+                      "width": {
+                        "description": "Width of the image in pixels. `null` if not known.",
+                        "example": 800,
+                        "type": "integer"
+                      }
+                    },
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              },
+              "is_typing": {
+                "example": true,
+                "type": "boolean"
+              },
+              "thread_id": {
+                "example": "string",
+                "type": "string"
               }
             },
             "type": "object"
