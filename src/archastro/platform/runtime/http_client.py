@@ -18,6 +18,27 @@ DEFAULT_API_PREFIX = "/api/v1"
 T = TypeVar("T")
 
 
+def _encode_query(query: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Drop unset parameters and encode list values as ``key[]=item``.
+
+    httpx writes a list under a bare repeated key (``source=a&source=b``),
+    and Plug's query parser keeps only the last value — the server would
+    silently filter on one element of a multi-value filter. The bracket
+    suffix parses as a list and matches the TypeScript SDK's encoding.
+    """
+    if not query:
+        return None
+    params: dict[str, Any] = {}
+    for key, value in query.items():
+        if value is None:
+            continue
+        if isinstance(value, (list, tuple)):
+            params[f"{key}[]"] = [str(item) for item in value]
+        else:
+            params[key] = value
+    return params or None
+
+
 @cache
 def _type_adapter(tp: Any) -> TypeAdapter[Any]:
     """Cache adapters per response type; TypeAdapter construction is costly."""
@@ -101,9 +122,7 @@ class HttpClient:
         if headers:
             req_headers.update(headers)
 
-        params = None
-        if query:
-            params = {k: v for k, v in query.items() if v is not None}
+        params = _encode_query(query)
 
         return await self._client.request(
             method,
@@ -278,7 +297,7 @@ class HttpClient:
             req_headers["Authorization"] = f"Bearer {token}"
         if headers:
             req_headers.update(headers)
-        params = {k: v for k, v in (query or {}).items() if v is not None} or None
+        params = _encode_query(query)
 
         async with self._client.stream(
             method,
@@ -378,9 +397,7 @@ class SyncHttpClient:
         if headers:
             req_headers.update(headers)
 
-        params = None
-        if query:
-            params = {k: v for k, v in query.items() if v is not None}
+        params = _encode_query(query)
 
         return self._client.request(
             method,
@@ -537,7 +554,7 @@ class SyncHttpClient:
             req_headers["Authorization"] = f"Bearer {token}"
         if headers:
             req_headers.update(headers)
-        params = {k: v for k, v in (query or {}).items() if v is not None} or None
+        params = _encode_query(query)
 
         with self._client.stream(
             method,
