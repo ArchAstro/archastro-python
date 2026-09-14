@@ -856,3 +856,90 @@ def test_stream_sse_sync_raises_apierror_on_non_2xx():
     with patch.object(client._client, "stream", return_value=_FakeSyncStream(resp)):
         with pytest.raises(ApiError):
             list(client.stream_sse_sync("/api/v1/x/stream", method="POST", body={}))
+
+
+# --- query encoding contract -------------------------------------------------
+#
+# The platform reads query parameters through Plug, whose parser keeps only the
+# last value of a repeated bare key. A multi-value filter sent as
+# `source=a&source=b` therefore silently narrows to one value server-side. These
+# tests pin the wire bytes rather than the dict handed to httpx, because the
+# defect only becomes visible after httpx encodes.
+
+
+async def test_async_list_query_params_encode_as_bracket_suffixed_repeats():
+    seen: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={})
+
+    client = HttpClient(base_url="https://api.test")
+    client._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    await client.request(
+        "/api/v1/knowledge_documents",
+        query={"source": ["cso_a", "cso_b", "cso_c"], "page_size": 100},
+    )
+
+    assert seen[0].url.query == (
+        b"source%5B%5D=cso_a&source%5B%5D=cso_b&source%5B%5D=cso_c&page_size=100"
+    )
+    # Every element survives the round trip as a distinct value under one key.
+    assert seen[0].url.params.get_list("source[]") == ["cso_a", "cso_b", "cso_c"]
+
+
+async def test_async_scalar_query_params_are_unchanged_and_none_is_dropped():
+    seen: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={})
+
+    client = HttpClient(base_url="https://api.test")
+    client._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    await client.request(
+        "/api/v1/knowledge_documents",
+        query={"q": "notes", "page_size": 25, "agent": None},
+    )
+
+    assert seen[0].url.query == b"q=notes&page_size=25"
+
+
+def test_sync_list_query_params_encode_as_bracket_suffixed_repeats():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={})
+
+    client = SyncHttpClient(base_url="https://api.test")
+    client._client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    client.request(
+        "/api/v1/knowledge_documents",
+        query={"source": ["cso_a", "cso_b", "cso_c"], "page_size": 100},
+    )
+
+    assert seen[0].url.query == (
+        b"source%5B%5D=cso_a&source%5B%5D=cso_b&source%5B%5D=cso_c&page_size=100"
+    )
+
+
+def test_sync_scalar_query_params_are_unchanged_and_none_is_dropped():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={})
+
+    client = SyncHttpClient(base_url="https://api.test")
+    client._client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    client.request(
+        "/api/v1/knowledge_documents",
+        query={"q": "notes", "page_size": 25, "agent": None},
+    )
+
+    assert seen[0].url.query == b"q=notes&page_size=25"
