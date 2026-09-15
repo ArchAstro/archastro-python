@@ -7,6 +7,8 @@ import asyncio
 import json
 import threading
 from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from functools import cache
 from typing import Any, TypeVar, overload
 
@@ -14,8 +16,47 @@ import httpx
 from pydantic import TypeAdapter
 
 DEFAULT_API_PREFIX = "/api/v1"
+DEFAULT_TIMEOUT_S = 30.0
 
 T = TypeVar("T")
+
+_request_timeout: ContextVar[float | None] = ContextVar("archastro_request_timeout", default=None)
+
+
+@contextmanager
+def request_timeout(seconds: float) -> Iterator[None]:
+    """Override the timeout of every request issued inside this block.
+
+    Applies to all SDK clients in the current context (a thread, or an
+    asyncio task and anything that copies its context such as
+    ``asyncio.to_thread``), including requests made by generated resource
+    methods, which take no timeout argument of their own. The value is read
+    when a request is sent; a stream reads it when iteration starts, so start
+    reading inside the block. It is the httpx timeout for each HTTP request (a
+    refresh-and-retry after a 401 gets the same value), not a total for the
+    block. Blocks nest; the innermost wins.
+
+    A value that is not positive (including NaN) raises :class:`TimeoutError`
+    before any request is sent, so a caller passing down the remainder of an
+    overall deadline fails fast once that deadline has passed.
+    """
+    token = _request_timeout.set(float(seconds))
+    try:
+        yield
+    finally:
+        _request_timeout.reset(token)
+
+
+def _resolve_timeout(method: str, path: str) -> Any:
+    """The per-request timeout override, or httpx's client-default sentinel."""
+    seconds = _request_timeout.get()
+    if seconds is None:
+        return httpx.USE_CLIENT_DEFAULT
+    if not seconds > 0:
+        raise TimeoutError(
+            f"request timeout budget exhausted before {method} {path} (timeout={seconds:.3f}s)"
+        )
+    return seconds
 
 
 def _encode_query(query: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -72,6 +113,7 @@ class HttpClient:
         path_prefix: str | None = None,
         default_headers: dict[str, str] | None = None,
         refresh_only: bool = False,
+        timeout: float = DEFAULT_TIMEOUT_S,
     ):
         self._base_url = base_url.rstrip("/")
         self._access_token = access_token
@@ -79,7 +121,8 @@ class HttpClient:
         self._on_refresh_token = on_refresh_token
         self._path_prefix = path_prefix
         self._default_headers = default_headers or {}
-        self._client = httpx.AsyncClient(timeout=30.0)
+        self._timeout = timeout
+        self._client = httpx.AsyncClient(timeout=timeout)
         self._refresh_task: asyncio.Task[str] | None = None
         self._refresh_only = refresh_only
 
@@ -110,6 +153,7 @@ class HttpClient:
         headers: dict[str, str] | None = None,
         query: dict[str, Any] | None = None,
     ) -> httpx.Response:
+        timeout = _resolve_timeout(method, path)
         token = self._get_token()
         url = f"{self._base_url}{self._transform_path(path)}"
 
@@ -130,6 +174,7 @@ class HttpClient:
             json=body if body is not None and method not in ("GET", "HEAD") else None,
             headers=req_headers,
             params=params,
+            timeout=timeout,
         )
 
     async def _execute(
@@ -287,6 +332,7 @@ class HttpClient:
                 f"Refresh-only HTTP client cannot make requests outside {auth_prefix}"
             )
 
+        timeout = _resolve_timeout(method, path)
         url = f"{self._base_url}{self._transform_path(path)}"
         sends_body = body is not None and method not in ("GET", "HEAD")
         req_headers = {**self._default_headers, "Accept": "text/event-stream"}
@@ -305,6 +351,7 @@ class HttpClient:
             json=body if sends_body else None,
             headers=req_headers,
             params=params,
+            timeout=timeout,
         ) as response:
             if response.status_code >= 400:
                 await response.aread()
@@ -347,6 +394,7 @@ class SyncHttpClient:
         path_prefix: str | None = None,
         default_headers: dict[str, str] | None = None,
         refresh_only: bool = False,
+        timeout: float = DEFAULT_TIMEOUT_S,
     ):
         self._base_url = base_url.rstrip("/")
         self._access_token = access_token
@@ -354,7 +402,8 @@ class SyncHttpClient:
         self._on_refresh_token = on_refresh_token
         self._path_prefix = path_prefix
         self._default_headers = default_headers or {}
-        self._client = httpx.Client(timeout=30.0)
+        self._timeout = timeout
+        self._client = httpx.Client(timeout=timeout)
         self._refresh_only = refresh_only
         self._refresh_lock = threading.Lock()
 
@@ -385,6 +434,7 @@ class SyncHttpClient:
         headers: dict[str, str] | None = None,
         query: dict[str, Any] | None = None,
     ) -> httpx.Response:
+        timeout = _resolve_timeout(method, path)
         token = self._get_token()
         url = f"{self._base_url}{self._transform_path(path)}"
 
@@ -405,6 +455,7 @@ class SyncHttpClient:
             json=body if body is not None and method not in ("GET", "HEAD") else None,
             headers=req_headers,
             params=params,
+            timeout=timeout,
         )
 
     def _execute(
@@ -544,6 +595,7 @@ class SyncHttpClient:
                 f"Refresh-only HTTP client cannot make requests outside {auth_prefix}"
             )
 
+        timeout = _resolve_timeout(method, path)
         url = f"{self._base_url}{self._transform_path(path)}"
         sends_body = body is not None and method not in ("GET", "HEAD")
         req_headers = {**self._default_headers, "Accept": "text/event-stream"}
@@ -562,6 +614,7 @@ class SyncHttpClient:
             json=body if sends_body else None,
             headers=req_headers,
             params=params,
+            timeout=timeout,
         ) as response:
             if response.status_code >= 400:
                 response.read()

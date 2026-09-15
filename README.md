@@ -144,6 +144,27 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+### Request Timeouts
+
+Each HTTP request times out after 30 seconds by default. Generated resource
+methods take no timeout argument, so the override is scoped instead:
+`request_timeout(seconds)` applies to every request sent inside the block, in
+the current thread or asyncio task (and code that copies its context, such as
+`asyncio.to_thread`). A streaming call reads the value when you start iterating
+it, so iterate inside the block.
+
+```python
+from archastro.platform.runtime.http_client import request_timeout
+
+with request_timeout(5.0):
+    docs = client.knowledge_documents.list(source=["cso_..."])
+```
+
+The value is a per-request httpx timeout, not a total for the block. To hold a
+chain of calls to one deadline, pass each call the time that remains. A value
+that is not positive raises `TimeoutError` without sending the request.
+`HttpClient` and `SyncHttpClient` also accept `timeout=` to change the default.
+
 ## Examples
 
 - [`examples/org_system_user_token`](examples/org_system_user_token) — run the

@@ -7,7 +7,12 @@ import httpx
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from archastro.platform.runtime.http_client import ApiError, HttpClient, SyncHttpClient
+from archastro.platform.runtime.http_client import (
+    ApiError,
+    HttpClient,
+    SyncHttpClient,
+    request_timeout,
+)
 
 
 def _mock_response(status: int, body: dict | None = None) -> httpx.Response:
@@ -287,6 +292,7 @@ def test_sync_client_sends_auth_headers_query_and_json_body():
             "Authorization": "Bearer sat_test",
         },
         params={"limit": 10},
+        timeout=httpx.USE_CLIENT_DEFAULT,
     )
 
 
@@ -575,6 +581,7 @@ async def test_async_client_sends_auth_headers_query_and_json_body():
             "Authorization": "Bearer sat_test",
         },
         params={"limit": 10},
+        timeout=httpx.USE_CLIENT_DEFAULT,
     )
 
 
@@ -594,6 +601,7 @@ async def test_async_client_drops_body_and_keeps_path_for_get_outside_api_prefix
         json=None,
         headers={"Content-Type": "application/json"},
         params=None,
+        timeout=httpx.USE_CLIENT_DEFAULT,
     )
 
 
@@ -943,3 +951,237 @@ def test_sync_scalar_query_params_are_unchanged_and_none_is_dropped():
     )
 
     assert seen[0].url.query == b"q=notes&page_size=25"
+
+
+# --- request timeout contract ------------------------------------------------
+#
+# Callers that run under an overall budget (the benchmark harness passes each
+# platform call the *remaining* seconds of its step) need every request to
+# honor a timeout they choose, including requests issued by generated resource
+# methods that expose no timeout argument. These tests read the timeout httpx
+# actually attaches to the outgoing request, not the arguments handed to it.
+
+
+def _timeouts(request: httpx.Request) -> dict[str, float]:
+    return request.extensions["timeout"]
+
+
+def _all(seconds: float) -> dict[str, float]:
+    return {"connect": seconds, "read": seconds, "write": seconds, "pool": seconds}
+
+
+def _recording_sync_client(**kwargs) -> tuple[SyncHttpClient, list[httpx.Request]]:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={})
+
+    client = SyncHttpClient(base_url="https://api.test", **kwargs)
+    client._client = httpx.Client(transport=httpx.MockTransport(handler), timeout=client._timeout)
+    return client, seen
+
+
+def _recording_async_client(**kwargs) -> tuple[HttpClient, list[httpx.Request]]:
+    seen: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={})
+
+    client = HttpClient(base_url="https://api.test", **kwargs)
+    client._client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), timeout=client._timeout
+    )
+    return client, seen
+
+
+def test_sync_default_request_timeout_is_thirty_seconds():
+    client, seen = _recording_sync_client()
+
+    client.request("/api/v1/things")
+
+    assert _timeouts(seen[0]) == _all(30.0)
+
+
+def test_sync_constructor_timeout_sets_the_client_default():
+    client = SyncHttpClient(base_url="https://api.test", timeout=7.5)
+
+    assert client._client.timeout == httpx.Timeout(7.5)
+
+
+async def test_async_constructor_timeout_sets_the_client_default():
+    client = HttpClient(base_url="https://api.test", timeout=7.5)
+
+    assert client._client.timeout == httpx.Timeout(7.5)
+
+
+def test_sync_request_timeout_overrides_only_inside_its_block():
+    client, seen = _recording_sync_client(timeout=30.0)
+
+    with request_timeout(4.25):
+        client.request("/api/v1/things")
+        client.request_raw("/api/v1/things/content")
+    client.request("/api/v1/things")
+
+    assert [_timeouts(r) for r in seen] == [_all(4.25), _all(4.25), _all(30.0)]
+
+
+async def test_async_request_timeout_overrides_only_inside_its_block():
+    client, seen = _recording_async_client(timeout=30.0)
+
+    with request_timeout(4.25):
+        await client.request("/api/v1/things")
+        await client.request_raw("/api/v1/things/content")
+    await client.request("/api/v1/things")
+
+    assert [_timeouts(r) for r in seen] == [_all(4.25), _all(4.25), _all(30.0)]
+
+
+def test_nested_request_timeout_innermost_wins_then_restores():
+    client, seen = _recording_sync_client()
+
+    with request_timeout(10.0):
+        with request_timeout(2.0):
+            client.request("/api/v1/inner")
+        client.request("/api/v1/outer")
+
+    assert [_timeouts(r) for r in seen] == [_all(2.0), _all(10.0)]
+
+
+def test_request_timeout_retry_after_401_uses_the_same_override():
+    responses = iter([httpx.Response(401, json={}), httpx.Response(200, json={"ok": True})])
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return next(responses)
+
+    client = SyncHttpClient(
+        base_url="https://api.test",
+        access_token="expired",
+        on_refresh_token=lambda: "fresh",
+    )
+    client._client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    with request_timeout(3.0):
+        assert client.request("/api/v1/things") == {"ok": True}
+
+    assert [_timeouts(r) for r in seen] == [_all(3.0), _all(3.0)]
+
+
+def test_request_timeout_does_not_leak_into_other_threads():
+    import threading
+
+    client, seen = _recording_sync_client(timeout=30.0)
+    entered = threading.Event()
+    release = threading.Event()
+
+    def hold_override():
+        with request_timeout(1.0):
+            entered.set()
+            release.wait(5)
+
+    holder = threading.Thread(target=hold_override)
+    holder.start()
+    try:
+        assert entered.wait(5)
+        client.request("/api/v1/things")
+    finally:
+        release.set()
+        holder.join()
+
+    assert _timeouts(seen[0]) == _all(30.0)
+
+
+@pytest.mark.parametrize("budget", [0.0, -0.5, float("nan")])
+def test_sync_expired_budget_raises_timeout_error_without_sending(budget):
+    client, seen = _recording_sync_client()
+
+    with request_timeout(budget):
+        with pytest.raises(TimeoutError, match="GET /api/v1/things"):
+            client.request("/api/v1/things")
+        with pytest.raises(TimeoutError):
+            client.request_raw("/api/v1/things")
+        with pytest.raises(TimeoutError):
+            list(client.stream_sse_sync("/api/v1/things/stream"))
+
+    assert seen == []
+
+
+@pytest.mark.parametrize("budget", [0.0, -0.5, float("nan")])
+async def test_async_expired_budget_raises_timeout_error_without_sending(budget):
+    client, seen = _recording_async_client()
+
+    with request_timeout(budget):
+        with pytest.raises(TimeoutError, match="POST /api/v1/things"):
+            await client.request("/api/v1/things", method="POST", body={})
+        with pytest.raises(TimeoutError):
+            await client.request_raw("/api/v1/things")
+        with pytest.raises(TimeoutError):
+            [ev async for ev in client.stream_sse("/api/v1/things/stream")]
+
+    assert seen == []
+
+
+def test_sync_stream_honors_request_timeout():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, content=b'event: done\ndata: {"ok": true}\n\n')
+
+    client = SyncHttpClient(base_url="https://api.test")
+    client._client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    with request_timeout(6.0):
+        events = list(client.stream_sse_sync("/api/v1/echo/stream"))
+
+    assert events == [{"event": "done", "data": {"ok": True}}]
+    assert _timeouts(seen[0]) == _all(6.0)
+
+
+async def test_async_stream_honors_request_timeout():
+    seen: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, content=b'event: done\ndata: {"ok": true}\n\n')
+
+    client = HttpClient(base_url="https://api.test")
+    client._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    with request_timeout(6.0):
+        events = [ev async for ev in client.stream_sse("/api/v1/echo/stream")]
+
+    assert events == [{"event": "done", "data": {"ok": True}}]
+    assert _timeouts(seen[0]) == _all(6.0)
+
+
+def test_generated_resource_methods_honor_request_timeout():
+    from archastro.platform.client import PlatformClient
+
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "data": [],
+                "has_next": False,
+                "has_prev": False,
+                "page": 1,
+                "page_size": 10,
+                "total_entries": 0,
+                "total_pages": 0,
+            },
+        )
+
+    client = PlatformClient.with_secret_key("sk_test", base_url="https://api.test")
+    client._http._client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    with request_timeout(2.5):
+        client.knowledge_documents.list(source=["cso_a"], page_size=10)
+
+    assert _timeouts(seen[0]) == _all(2.5)
