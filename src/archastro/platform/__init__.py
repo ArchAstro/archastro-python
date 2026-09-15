@@ -6,6 +6,7 @@ from importlib.metadata import version as _pkg_version
 
 from .auth import AsyncAuthClient, AuthClient, AuthTokens  # noqa: F401
 from .client import AsyncPlatformClient, PlatformClient  # noqa: F401
+from .runtime.http_client import DEFAULT_TIMEOUT_S, request_timeout  # noqa: F401
 from .v1 import (
     V1,  # noqa: F401
     AsyncV1,  # noqa: F401
