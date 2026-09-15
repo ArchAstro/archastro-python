@@ -2,7 +2,7 @@
   "name": "archastro-python-tooling",
   "version": "0.0.0",
   "private": true,
-  "description": "JS tooling deps for the ArchAstro Python SDK \u2014 the channel-harness subprocess that backs channel contract tests, and the Prism mock server used by REST contract tests.",
+  "description": "JS tooling deps for the ArchAstro Python SDK — the channel-harness subprocess that backs channel contract tests, and the Prism mock server used by REST contract tests.",
   "scripts": {
     "regenerate": "bash scripts/regenerate_sdk.sh"
   },
