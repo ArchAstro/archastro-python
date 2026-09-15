@@ -52,6 +52,16 @@ function auditReport() {
 
 const report = JSON.parse(auditReport());
 
+// A registry failure also exits non-zero, with an {"error": ...} body and no
+// vulnerabilities map. Without this, an unreachable registry would look like a
+// clean tree whose waiver had gone stale — fail-closed, but for the wrong
+// reason and with a message that sends you to delete a live waiver.
+if (report.error) {
+  throw new Error(
+    `npm audit could not produce a report: ${report.error.summary ?? JSON.stringify(report.error)}`,
+  );
+}
+
 const BLOCKING = new Set(["moderate", "high", "critical"]);
 const found = new Map();
 

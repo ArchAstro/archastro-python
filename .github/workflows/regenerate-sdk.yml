@@ -47,7 +47,7 @@ jobs:
           npm install --package-lock-only --ignore-scripts
 
       - name: Audit JS tooling dependencies
-        run: npm audit --audit-level=moderate
+        run: node scripts/audit-js-tooling.mjs
 
       - name: Setup Python
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
