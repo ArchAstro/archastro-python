@@ -154,16 +154,19 @@ the current thread or asyncio task (and code that copies its context, such as
 it, so iterate inside the block.
 
 ```python
-from archastro.platform.runtime.http_client import request_timeout
+from archastro.platform import request_timeout
 
 with request_timeout(5.0):
     docs = client.knowledge_documents.list(source=["cso_..."])
 ```
 
-The value is a per-request httpx timeout, not a total for the block. To hold a
-chain of calls to one deadline, pass each call the time that remains. A value
+The value is a per-request httpx timeout, not a total for the block. After a
+401, the token refresh request and the retried request each get the same value,
+so a single call can take up to three times it. To hold a chain of calls to one
+deadline, pass each call the time that remains. A value
 that is not positive raises `TimeoutError` without sending the request.
-`HttpClient` and `SyncHttpClient` also accept `timeout=` to change the default.
+`HttpClient` and `SyncHttpClient` also accept `timeout=` to change the default
+(`DEFAULT_TIMEOUT_S`, 30 seconds).
 
 ## Examples
 

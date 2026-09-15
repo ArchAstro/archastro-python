@@ -32,9 +32,10 @@ def request_timeout(seconds: float) -> Iterator[None]:
     ``asyncio.to_thread``), including requests made by generated resource
     methods, which take no timeout argument of their own. The value is read
     when a request is sent; a stream reads it when iteration starts, so start
-    reading inside the block. It is the httpx timeout for each HTTP request (a
-    refresh-and-retry after a 401 gets the same value), not a total for the
-    block. Blocks nest; the innermost wins.
+    reading inside the block. It is the httpx timeout for each HTTP request, not
+    a total for the block: after a 401, the token refresh request and the retry
+    each get the same value again, so one call can spend up to three times it.
+    Blocks nest; the innermost wins.
 
     A value that is not positive (including NaN) raises :class:`TimeoutError`
     before any request is sent, so a caller passing down the remainder of an

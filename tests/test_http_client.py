@@ -1049,25 +1049,78 @@ def test_nested_request_timeout_innermost_wins_then_restores():
     assert [_timeouts(r) for r in seen] == [_all(2.0), _all(10.0)]
 
 
-def test_request_timeout_retry_after_401_uses_the_same_override():
-    responses = iter([httpx.Response(401, json={}), httpx.Response(200, json={"ok": True})])
-    seen: list[httpx.Request] = []
+def _refreshing_transport(seen: list[httpx.Request]):
+    """First /things call is a 401; /auth/refresh issues a token; retry succeeds."""
+    calls = {"things": 0}
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def answer(request: httpx.Request) -> httpx.Response:
         seen.append(request)
-        return next(responses)
+        if request.url.path == "/api/v1/auth/refresh":
+            return httpx.Response(200, json={"access_token": "fresh"})
+        calls["things"] += 1
+        if calls["things"] == 1:
+            return httpx.Response(401, json={})
+        return httpx.Response(200, json={"ok": True})
 
+    return answer
+
+
+def test_sync_refresh_request_and_retry_use_the_same_override():
+    # The refresh is sent by a separate refresh-only client, the way the
+    # generated `with_credentials` builder wires it, so this pins that the
+    # override reaches that client too and cannot fall back to its 30s default.
+    seen: list[httpx.Request] = []
+    transport = httpx.MockTransport(_refreshing_transport(seen))
+    refresh_http = SyncHttpClient(base_url="https://api.test", refresh_only=True)
+    refresh_http._client = httpx.Client(transport=transport)
     client = SyncHttpClient(
         base_url="https://api.test",
         access_token="expired",
-        on_refresh_token=lambda: "fresh",
+        on_refresh_token=lambda: refresh_http.request("/api/v1/auth/refresh", method="POST")[
+            "access_token"
+        ],
     )
-    client._client = httpx.Client(transport=httpx.MockTransport(handler))
+    client._client = httpx.Client(transport=transport)
 
     with request_timeout(3.0):
         assert client.request("/api/v1/things") == {"ok": True}
 
-    assert [_timeouts(r) for r in seen] == [_all(3.0), _all(3.0)]
+    assert [(r.url.path, _timeouts(r)) for r in seen] == [
+        ("/api/v1/things", _all(3.0)),
+        ("/api/v1/auth/refresh", _all(3.0)),
+        ("/api/v1/things", _all(3.0)),
+    ]
+
+
+async def test_async_refresh_request_and_retry_use_the_same_override():
+    # The async refresh runs in its own asyncio task; tasks copy the caller's
+    # context, which is what carries the override into the refresh request.
+    seen: list[httpx.Request] = []
+    transport = _refreshing_transport(seen)
+
+    async def answer(request: httpx.Request) -> httpx.Response:
+        return transport(request)
+
+    refresh_http = HttpClient(base_url="https://api.test", refresh_only=True)
+    refresh_http._client = httpx.AsyncClient(transport=httpx.MockTransport(answer))
+
+    async def refresh() -> str:
+        tokens = await refresh_http.request("/api/v1/auth/refresh", method="POST")
+        return tokens["access_token"]
+
+    client = HttpClient(
+        base_url="https://api.test", access_token="expired", on_refresh_token=refresh
+    )
+    client._client = httpx.AsyncClient(transport=httpx.MockTransport(answer))
+
+    with request_timeout(3.0):
+        assert await client.request("/api/v1/things") == {"ok": True}
+
+    assert [(r.url.path, _timeouts(r)) for r in seen] == [
+        ("/api/v1/things", _all(3.0)),
+        ("/api/v1/auth/refresh", _all(3.0)),
+        ("/api/v1/things", _all(3.0)),
+    ]
 
 
 def test_request_timeout_does_not_leak_into_other_threads():
@@ -1159,7 +1212,13 @@ async def test_async_stream_honors_request_timeout():
 
 
 def test_generated_resource_methods_honor_request_timeout():
-    from archastro.platform.client import PlatformClient
+    # Imported from the package root: that is the public path the README
+    # teaches, and a regeneration that drops the re-export fails here.
+    from archastro.platform import DEFAULT_TIMEOUT_S, PlatformClient
+    from archastro.platform import request_timeout as public_request_timeout
+
+    assert public_request_timeout is request_timeout
+    assert DEFAULT_TIMEOUT_S == 30.0
 
     seen: list[httpx.Request] = []
 
@@ -1181,7 +1240,7 @@ def test_generated_resource_methods_honor_request_timeout():
     client = PlatformClient.with_secret_key("sk_test", base_url="https://api.test")
     client._http._client = httpx.Client(transport=httpx.MockTransport(handler))
 
-    with request_timeout(2.5):
+    with public_request_timeout(2.5):
         client.knowledge_documents.list(source=["cso_a"], page_size=10)
 
     assert _timeouts(seen[0]) == _all(2.5)
