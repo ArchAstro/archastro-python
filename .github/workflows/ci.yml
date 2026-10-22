@@ -76,3 +76,8 @@ jobs:
           uv pip install --python .wheel-smoke --require-hashes -r dist/runtime-requirements.txt
           uv pip install --python .wheel-smoke --no-deps dist/*.whl
           .wheel-smoke/bin/python -c "import archastro.platform; import archastro.phx_channel"
+          # Run the thread-computers e2e against the installed wheel, not src/.
+          uv export --locked --no-emit-project --only-group dev --format requirements.txt --output-file dist/test-requirements.txt >/dev/null
+          uv pip install --python .wheel-smoke --require-hashes -r dist/test-requirements.txt
+          .wheel-smoke/bin/python -c "import archastro.platform as p; assert 'site-packages' in p.__file__, p.__file__"
+          .wheel-smoke/bin/python -m pytest tests/test_thread_computers_e2e.py
